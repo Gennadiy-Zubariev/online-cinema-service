@@ -21,3 +21,15 @@ dev = [
     "flake8 (>=7.4.1,<8.0.0)",
     "mypy (>=2.4.0,<3.0.0)"
 ]
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
