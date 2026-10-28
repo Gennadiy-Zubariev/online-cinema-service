@@ -1,20 +1,8 @@
-import re
 from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field
 
-
-def validate_password_strength(password: str) -> str:
-    if not re.search(r"[A-Z]", password):
-        raise ValueError("Password must contain at least one uppercase letter")
-    if not re.search(r"[a-z]", password):
-        raise ValueError("Password must contain at least one lowercase letter")
-    if not re.search(r"\d", password):
-        raise ValueError("Password must contain at least one digit")
-    if not re.search(r"[^A-Za-z0-9]", password):
-        raise ValueError("Password must contain at least one special character")
-    return password
-
+from src.accounts.validators import validate_password_strength
 
 NormalizedEmail = Annotated[EmailStr, AfterValidator(str.lower)]
 StrongPassword = Annotated[
