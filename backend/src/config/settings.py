@@ -1,6 +1,8 @@
 from functools import lru_cache
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy import URL
 
 
 class Settings(BaseSettings):
@@ -12,6 +14,23 @@ class Settings(BaseSettings):
 
     PROJECT_NAME: str = "Online Cinema"
     DEBUG: bool = False
+
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: SecretStr
+    POSTGRES_DB: str
+    POSTGRES_HOST: str
+    POSTGRES_PORT: int = 5432
+
+    @property
+    def database_url(self) -> URL:
+        return URL.create(
+            drivername="postgresql+psycopg",
+            username=self.POSTGRES_USER,
+            password=self.POSTGRES_PASSWORD.get_secret_value(),
+            host=self.POSTGRES_HOST,
+            port=self.POSTGRES_PORT,
+            database=self.POSTGRES_DB,
+        )
 
 
 @lru_cache
