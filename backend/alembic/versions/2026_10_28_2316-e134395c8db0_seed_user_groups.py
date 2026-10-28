@@ -23,8 +23,10 @@ GROUPS = ["user", "moderator", "admin"]
 
 
 def upgrade() -> None:
+    """Seed user groups."""
     op.bulk_insert(user_groups, [{"name": name} for name in GROUPS])
 
 
 def downgrade() -> None:
+    """Remove seeded user groups."""
     op.execute(user_groups.delete().where(user_groups.c.name.in_(GROUPS)))
