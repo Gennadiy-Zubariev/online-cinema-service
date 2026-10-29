@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     POSTGRES_HOST: str
     POSTGRES_PORT: int = 5432
 
+    ACTIVATION_TOKEN_EXPIRE_HOURS: int = 24
+
     @property
     def database_url(self) -> URL:
         return URL.create(
