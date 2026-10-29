@@ -1,7 +1,9 @@
 from datetime import UTC, datetime, timedelta
 
 from fastapi.concurrency import run_in_threadpool
+from psycopg.errors import UniqueViolation
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.accounts.exceptions import UserAlreadyExistsError
@@ -34,7 +36,13 @@ async def register_user(
     )
 
     db.add(user)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as error:
+        await db.rollback()
+        if isinstance(error.orig, UniqueViolation):
+            raise UserAlreadyExistsError(data.email) from error
+        raise  # not an email conflict — propagate as 500
 
     # TODO(step 7): send_activation_email.delay(user.email, raw_token)
     return user
