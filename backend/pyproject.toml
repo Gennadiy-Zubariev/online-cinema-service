@@ -25,7 +25,9 @@ dev = [
     "pytest (>=9.1.1,<10.0.0)",
     "black (>=26.10.1,<27.0.0)",
     "flake8 (>=7.4.1,<8.0.0)",
-    "mypy (>=2.4.0,<3.0.0)"
+    "mypy (>=2.4.0,<3.0.0)",
+    "pytest-asyncio (>=1.4.1,<2.0.0)",
+    "httpx (>=0.28.1,<0.29.0)"
 ]
 
 [tool.black]
@@ -39,3 +41,5 @@ plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
