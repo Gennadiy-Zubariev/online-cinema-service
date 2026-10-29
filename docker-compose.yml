@@ -6,6 +6,7 @@ services:
       - ./backend/.env
     environment:
       POSTGRES_HOST: db
+      REDIS_HOST: redis
     volumes:
       - ./backend:/app
     depends_on:
@@ -19,6 +20,7 @@ services:
       - ./backend/.env
     environment:
       POSTGRES_HOST: db
+      REDIS_HOST: redis
     ports:
       - "8000:8000"
     volumes:
@@ -55,6 +57,32 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  worker:
+    build: ./backend
+    command: celery -A src.tasks.celery_app:celery_app worker --loglevel=info
+    env_file:
+      - ./backend/.env
+    environment:
+      POSTGRES_HOST: db
+      REDIS_HOST: redis
+      SMTP_HOST: mailpit
+    volumes:
+      - ./backend:/app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  mailpit:
+    image: axllent/mailpit:v1.32
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
 
 volumes:
   postgres_data:

@@ -23,7 +23,19 @@ class Settings(BaseSettings):
     POSTGRES_HOST: str
     POSTGRES_PORT: int = 5432
 
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+
     ACTIVATION_TOKEN_EXPIRE_HOURS: int = 24
+
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 1025
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: SecretStr = SecretStr("")
+    SMTP_USE_TLS: bool = False
+    EMAIL_FROM: str = "noreply@online-cinema.local"
+
+    FRONTEND_URL: str = "http://localhost:3000"
 
     @property
     def database_url(self) -> URL:
@@ -35,6 +47,10 @@ class Settings(BaseSettings):
             port=self.POSTGRES_PORT,
             database=self.POSTGRES_DB,
         )
+
+    @property
+    def redis_url(self) -> str:
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
 
 
 @lru_cache
