@@ -5,7 +5,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from config.settings import Settings
+from src.config.settings import Settings
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 SMTP_TIMEOUT_SECONDS = 10
