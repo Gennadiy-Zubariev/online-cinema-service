@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator, Generator
+from unittest.mock import MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -60,7 +61,17 @@ async def db_session(create_schema: None) -> AsyncGenerator[AsyncSession]:
 
 
 @pytest.fixture
-async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient]:
+def send_activation_email_mock(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    """Replace the Celery task where it is used, so tests need no Redis/worker."""
+    task_mock = MagicMock()
+    monkeypatch.setattr("src.accounts.service.send_activation_email", task_mock)
+    return task_mock
+
+
+@pytest.fixture
+async def client(
+    db_session: AsyncSession, send_activation_email_mock: MagicMock
+) -> AsyncGenerator[AsyncClient]:
     async def override_get_db() -> AsyncGenerator[AsyncSession]:
         yield db_session
 

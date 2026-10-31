@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock
 
 import pytest
 from httpx import AsyncClient
@@ -6,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.accounts.models import ActivationToken, User, UserGroup, UserGroupEnum
+from src.accounts.security import hash_token
 from src.config.settings import get_settings
 
 REGISTER_URL = "/api/v1/accounts/register"
@@ -69,6 +71,43 @@ async def test_register_creates_hashed_activation_token(
         hours=get_settings().ACTIVATION_TOKEN_EXPIRE_HOURS
     )
     assert abs(token.expires_at - expected_expires_at) < timedelta(minutes=1)
+
+
+async def test_register_sends_activation_email_with_raw_token(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    send_activation_email_mock: MagicMock,
+) -> None:
+    response = await client.post(
+        REGISTER_URL, json={"email": "user@example.com", "password": VALID_PASSWORD}
+    )
+
+    send_activation_email_mock.delay.assert_called_once()
+    email, raw_token = send_activation_email_mock.delay.call_args.args
+    assert email == "user@example.com"
+
+    # The email gets the raw token; the DB stores only its hash.
+    token_hash = await db_session.scalar(
+        select(ActivationToken.token_hash).where(
+            ActivationToken.user_id == response.json()["id"]
+        )
+    )
+    assert token_hash == hash_token(raw_token)
+
+
+async def test_register_does_not_send_email_for_existing_email(
+    client: AsyncClient, send_activation_email_mock: MagicMock
+) -> None:
+    await client.post(
+        REGISTER_URL, json={"email": "user@example.com", "password": VALID_PASSWORD}
+    )
+    send_activation_email_mock.reset_mock()
+
+    await client.post(
+        REGISTER_URL, json={"email": "user@example.com", "password": VALID_PASSWORD}
+    )
+
+    send_activation_email_mock.delay.assert_not_called()
 
 
 @pytest.mark.parametrize(
