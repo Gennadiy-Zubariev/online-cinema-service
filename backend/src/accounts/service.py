@@ -11,6 +11,7 @@ from src.accounts.models import ActivationToken, User, UserGroup, UserGroupEnum
 from src.accounts.schemas import UserRegisterRequest
 from src.accounts.security import generate_token, hash_password, hash_token
 from src.config.settings import Settings
+from src.tasks.emails import send_activation_email
 
 
 async def register_user(
@@ -44,5 +45,5 @@ async def register_user(
             raise UserAlreadyExistsError(data.email) from error
         raise  # not an email conflict — propagate as 500
 
-    # TODO(step 7): send_activation_email.delay(user.email, raw_token)
+    send_activation_email.delay(user.email, raw_token)
     return user
