@@ -5,8 +5,13 @@ from psycopg.errors import UniqueViolation
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
-from src.accounts.exceptions import UserAlreadyExistsError
+from src.accounts.exceptions import (
+    UserAlreadyExistsError,
+    ActivationTokenExpiredError,
+    InvalidActivationTokenError,
+)
 from src.accounts.models import ActivationToken, User, UserGroup, UserGroupEnum
 from src.accounts.schemas import UserRegisterRequest
 from src.accounts.security import generate_token, hash_password, hash_token
@@ -46,4 +51,22 @@ async def register_user(
         raise  # not an email conflict — propagate as 500
 
     send_activation_email.delay(user.email, raw_token)
+    return user
+
+
+async def activate_account(db: AsyncSession, token: str) -> User:
+    hashed_token = hash_token(token)
+    activation_token = await db.scalar(
+        select(ActivationToken)
+        .where(ActivationToken.token_hash == hashed_token)
+        .options(joinedload(ActivationToken.user))
+    )
+    if activation_token is None:
+        raise InvalidActivationTokenError()
+    if activation_token.expires_at < datetime.now(UTC):
+        raise ActivationTokenExpiredError()
+    user = activation_token.user
+    user.is_active = True
+    await db.delete(activation_token)
+    await db.commit()
     return user

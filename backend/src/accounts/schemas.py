@@ -23,3 +23,15 @@ class UserResponse(BaseModel):
     id: int
     email: str
     is_active: bool
+
+
+class ActivationRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=128)
+
+
+class ResendActivationRequest(BaseModel):
+    email: NormalizedEmail
+
+
+class MessageResponse(BaseModel):
+    message: str
