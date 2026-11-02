@@ -13,7 +13,7 @@ from src.accounts.exceptions import (
     InvalidActivationTokenError,
 )
 from src.accounts.models import ActivationToken, User, UserGroup, UserGroupEnum
-from src.accounts.schemas import UserRegisterRequest
+from src.accounts.schemas import UserRegisterRequest, ResendActivationRequest
 from src.accounts.security import generate_token, hash_password, hash_token
 from src.config.settings import Settings
 from src.tasks.emails import send_activation_email
@@ -70,3 +70,29 @@ async def activate_account(db: AsyncSession, token: str) -> User:
     await db.delete(activation_token)
     await db.commit()
     return user
+
+
+async def resend_activation_token(
+    db: AsyncSession,
+    data: ResendActivationRequest,
+    settings: Settings,
+) -> None:
+    user = await db.scalar(
+        select(User)
+        .where(User.email == data.email)
+        .options(joinedload(User.activation_token))
+    )
+    if not user or user.is_active:
+        return
+    activation_token = user.activation_token
+    if activation_token is not None:
+        await db.delete(activation_token)
+        await db.flush()
+    raw_token = generate_token()
+    user.activation_token = ActivationToken(
+        token_hash=hash_token(raw_token),
+        expires_at=datetime.now(UTC)
+        + timedelta(hours=settings.ACTIVATION_TOKEN_EXPIRE_HOURS),
+    )
+    await db.commit()
+    send_activation_email.delay(user.email, raw_token)
