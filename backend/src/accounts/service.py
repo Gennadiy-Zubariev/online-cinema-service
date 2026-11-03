@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi.concurrency import run_in_threadpool
 from psycopg.errors import UniqueViolation
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -145,3 +145,10 @@ async def login_user(
     )
     await db.commit()
     return create_access_token(user_id=user.id, settings=settings), refresh_token
+
+
+async def logout_user(db: AsyncSession, refresh_token: str) -> None:
+    await db.execute(
+        delete(RefreshToken).where(RefreshToken.token_hash == hash_token(refresh_token))
+    )
+    await db.commit()

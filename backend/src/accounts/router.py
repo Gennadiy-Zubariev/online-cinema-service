@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Response, status
+from typing import Annotated
+
+from fastapi import APIRouter, Response, status, Cookie
 
 from src.accounts.models import User
 from src.accounts.schemas import (
@@ -15,11 +17,15 @@ from src.accounts.service import (
     activate_account,
     resend_activation_token,
     login_user,
+    logout_user,
 )
 from src.config.settings import SettingsDep
 from src.database.session import DbSession
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
+
+REFRESH_COOKIE_NAME = "refresh_token"
+REFRESH_COOKIE_PATH = "/api/v1/accounts"
 
 
 @router.post(
@@ -71,12 +77,33 @@ async def login(
 ) -> AccessTokenResponse:
     access_token, refresh_token = await login_user(db=db, data=data, settings=settings)
     response.set_cookie(
-        key="refresh_token",
+        key=REFRESH_COOKIE_NAME,
         value=refresh_token,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         httponly=True,
         secure=settings.COOKIE_SECURE,
         samesite="lax",
-        path="/api/v1/accounts",
+        path=REFRESH_COOKIE_PATH,
     )
     return AccessTokenResponse(access_token=access_token)
+
+
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def logout(
+    db: DbSession,
+    settings: SettingsDep,
+    response: Response,
+    refresh_token: Annotated[str | None, Cookie()] = None,
+) -> None:
+    if refresh_token is not None:
+        await logout_user(db=db, refresh_token=refresh_token)
+    response.delete_cookie(
+        key=REFRESH_COOKIE_NAME,
+        path=REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+    )
