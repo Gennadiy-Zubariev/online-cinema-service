@@ -6,6 +6,7 @@ from src.accounts.exception_handlers import (
     expired_activation_token_handler,
     invalid_credentials_handler,
     user_not_active_handler,
+    invalid_refresh_token_handler,
 )
 from src.accounts.exceptions import (
     UserAlreadyExistsError,
@@ -13,6 +14,7 @@ from src.accounts.exceptions import (
     ActivationTokenExpiredError,
     InvalidCredentialsError,
     UserNotActiveError,
+    InvalidRefreshTokenError,
 )
 from src.accounts.router import router as accounts_router
 from src.config.settings import get_settings
@@ -32,6 +34,7 @@ app.add_exception_handler(InvalidActivationTokenError, invalid_activation_token_
 app.add_exception_handler(ActivationTokenExpiredError, expired_activation_token_handler)
 app.add_exception_handler(InvalidCredentialsError, invalid_credentials_handler)
 app.add_exception_handler(UserNotActiveError, user_not_active_handler)
+app.add_exception_handler(InvalidRefreshTokenError, invalid_refresh_token_handler)
 
 
 @app.get("/health")

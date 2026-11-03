@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Response, status, Cookie
 
+from src.accounts.exceptions import InvalidRefreshTokenError
 from src.accounts.models import User
 from src.accounts.schemas import (
     UserResponse,
@@ -18,6 +19,7 @@ from src.accounts.service import (
     resend_activation_token,
     login_user,
     logout_user,
+    refresh_access_token,
 )
 from src.config.settings import SettingsDep
 from src.database.session import DbSession
@@ -107,3 +109,22 @@ async def logout(
         secure=settings.COOKIE_SECURE,
         samesite="lax",
     )
+
+
+@router.post(
+    "/refresh",
+    response_model=AccessTokenResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def refresh(
+    db: DbSession,
+    settings: SettingsDep,
+    refresh_token: Annotated[str | None, Cookie()] = None,
+) -> AccessTokenResponse:
+    if refresh_token is None:
+        raise InvalidRefreshTokenError()
+    access_token = await refresh_access_token(
+        db=db, refresh_token=refresh_token, settings=settings
+    )
+
+    return AccessTokenResponse(access_token=access_token)

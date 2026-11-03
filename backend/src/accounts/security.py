@@ -5,6 +5,7 @@ from datetime import datetime, UTC, timedelta
 import jwt
 from pwdlib import PasswordHash
 
+from src.accounts.exceptions import InvalidRefreshTokenError
 from src.config.settings import Settings
 
 JWT_ALGORITHM = "HS256"
@@ -59,3 +60,19 @@ def create_refresh_token(user_id: int, settings: Settings) -> str:
         timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
         settings,
     )
+
+
+def decode_refresh_token(token: str, settings: Settings) -> int:
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY.get_secret_value(),
+            algorithms=[JWT_ALGORITHM],
+            options={"require": ["exp", "iat", "sub", "type", "jti"]},
+        )
+    except jwt.InvalidTokenError as error:
+        raise InvalidRefreshTokenError() from error
+
+    if payload["type"] != "refresh":
+        raise InvalidRefreshTokenError()
+    return int(payload["sub"])

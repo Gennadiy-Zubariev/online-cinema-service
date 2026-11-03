@@ -13,6 +13,7 @@ from src.accounts.exceptions import (
     InvalidActivationTokenError,
     InvalidCredentialsError,
     UserNotActiveError,
+    InvalidRefreshTokenError,
 )
 from src.accounts.models import (
     ActivationToken,
@@ -33,6 +34,7 @@ from src.accounts.security import (
     create_access_token,
     verify_password,
     create_refresh_token,
+    decode_refresh_token,
 )
 from src.config.settings import Settings
 from src.tasks.emails import send_activation_email
@@ -152,3 +154,17 @@ async def logout_user(db: AsyncSession, refresh_token: str) -> None:
         delete(RefreshToken).where(RefreshToken.token_hash == hash_token(refresh_token))
     )
     await db.commit()
+
+
+async def refresh_access_token(
+    db: AsyncSession, refresh_token: str, settings: Settings
+) -> str:
+    user_id = decode_refresh_token(token=refresh_token, settings=settings)
+    token_id = await db.scalar(
+        select(RefreshToken.id).where(
+            RefreshToken.token_hash == hash_token(refresh_token)
+        )
+    )
+    if token_id is None:
+        raise InvalidRefreshTokenError()
+    return create_access_token(user_id=user_id, settings=settings)

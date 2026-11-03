@@ -40,3 +40,13 @@ async def user_not_active_handler(request: Request, exc: Exception) -> JSONRespo
         status_code=status.HTTP_403_FORBIDDEN,
         content={"detail": "Account is not activated. Please check your email."},
     )
+
+
+async def invalid_refresh_token_handler(
+    request: Request, exc: Exception
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        content={"detail": "Invalid or expired refresh token. Please log in again."},
+        headers={"WWW-Authenticate": "Bearer"},
+    )

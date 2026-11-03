@@ -24,3 +24,7 @@ class InvalidCredentialsError(AccountsError):
 
 class UserNotActiveError(AccountsError):
     """Raised when credentials are valid but the account is not activated."""
+
+
+class InvalidRefreshTokenError(AccountsError):
+    """Raised when the refresh token is missing, invalid, expired or revoked."""
