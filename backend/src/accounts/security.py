@@ -27,14 +27,35 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def create_access_token(user_id: int, settings: Settings) -> str:
+def _create_jwt_token(
+    user_id: int, token_type: str, expires_in: timedelta, settings: Settings
+) -> str:
     now = datetime.now(UTC)
     payload = {
         "sub": str(user_id),
+        "type": token_type,
         "iat": now,
-        "exp": now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+        "exp": now + expires_in,
+        "jti": generate_token(),
     }
-
     return jwt.encode(
         payload, settings.SECRET_KEY.get_secret_value(), algorithm=JWT_ALGORITHM
+    )
+
+
+def create_access_token(user_id: int, settings: Settings) -> str:
+    return _create_jwt_token(
+        user_id,
+        "access",
+        timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+        settings,
+    )
+
+
+def create_refresh_token(user_id: int, settings: Settings) -> str:
+    return _create_jwt_token(
+        user_id,
+        "refresh",
+        timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+        settings,
     )

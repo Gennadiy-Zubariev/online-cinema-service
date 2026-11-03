@@ -32,6 +32,7 @@ from src.accounts.security import (
     hash_token,
     create_access_token,
     verify_password,
+    create_refresh_token,
 )
 from src.config.settings import Settings
 from src.tasks.emails import send_activation_email
@@ -133,14 +134,14 @@ async def login_user(
     if not user.is_active:
         raise UserNotActiveError()
 
-    raw_refresh_token = generate_token()
+    refresh_token = create_refresh_token(user_id=user.id, settings=settings)
     db.add(
         RefreshToken(
             user_id=user.id,
-            token_hash=hash_token(raw_refresh_token),
+            token_hash=hash_token(refresh_token),
             expires_at=datetime.now(UTC)
             + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
         )
     )
     await db.commit()
-    return create_access_token(user.id, settings), raw_refresh_token
+    return create_access_token(user_id=user.id, settings=settings), refresh_token
