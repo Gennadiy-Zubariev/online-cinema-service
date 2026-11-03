@@ -5,6 +5,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import create_engine, insert
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
 from src.accounts.models import UserGroup, UserGroupEnum
@@ -21,22 +22,24 @@ TEST_DATABASE_URL = settings.database_url.set(database=f"{settings.POSTGRES_DB}_
 # and closed afterwards, so connections never leak between loops.
 test_engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
 
+# Sync engine: schema setup and code that runs in Celery tasks.
+sync_test_engine = create_engine(TEST_DATABASE_URL)
+
 
 @pytest.fixture(scope="session")
 def create_schema() -> Generator[None]:
     """Create tables and seed user groups once per test session."""
-    sync_engine = create_engine(TEST_DATABASE_URL)
-    Base.metadata.drop_all(sync_engine)
-    Base.metadata.create_all(sync_engine)
-    with sync_engine.begin() as connection:
+    Base.metadata.drop_all(sync_test_engine)
+    Base.metadata.create_all(sync_test_engine)
+    with sync_test_engine.begin() as connection:
         connection.execute(
             insert(UserGroup), [{"name": group} for group in UserGroupEnum]
         )
 
     yield
 
-    Base.metadata.drop_all(sync_engine)
-    sync_engine.dispose()
+    Base.metadata.drop_all(sync_test_engine)
+    sync_test_engine.dispose()
 
 
 @pytest.fixture
@@ -58,6 +61,23 @@ async def db_session(create_schema: None) -> AsyncGenerator[AsyncSession]:
 
         await session.close()
         await transaction.rollback()
+
+
+@pytest.fixture
+def sync_db_session(create_schema: None) -> Generator[Session]:
+    """Sync twin of `db_session` for code that runs in Celery tasks."""
+    with sync_test_engine.connect() as connection:
+        transaction = connection.begin()
+        session = Session(
+            bind=connection,
+            expire_on_commit=False,
+            join_transaction_mode="create_savepoint",
+        )
+
+        yield session
+
+        session.close()
+        transaction.rollback()
 
 
 @pytest.fixture

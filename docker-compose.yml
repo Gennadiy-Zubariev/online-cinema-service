@@ -77,6 +77,19 @@ services:
       mailpit:
         condition: service_started
 
+  beat:
+    build: ./backend
+    command: celery -A src.tasks.celery_app:celery_app beat --loglevel=info -s /tmp/celerybeat-schedule
+    env_file:
+      - ./backend/.env
+    environment:
+      REDIS_HOST: redis
+    volumes:
+      - ./backend:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+
   mailpit:
     image: axllent/mailpit:v1.32
     ports:
