@@ -28,6 +28,11 @@ class Settings(BaseSettings):
 
     ACTIVATION_TOKEN_EXPIRE_HOURS: int = 24
 
+    SECRET_KEY: SecretStr
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    COOKIE_SECURE: bool = True
+
     SMTP_HOST: str = "localhost"
     SMTP_PORT: int = 1025
     SMTP_USER: str = ""
