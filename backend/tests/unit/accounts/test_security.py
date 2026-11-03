@@ -1,17 +1,24 @@
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
+import pytest
+from pydantic import SecretStr
 
+from src.accounts.exceptions import InvalidRefreshTokenError
 from src.accounts.security import (
     JWT_ALGORITHM,
+    _create_jwt_token,
     create_access_token,
     create_refresh_token,
+    decode_refresh_token,
     generate_token,
     hash_password,
     hash_token,
     verify_password,
 )
-from src.config.settings import get_settings
+from src.config.settings import Settings, get_settings
 
 
 def test_hash_password_does_not_return_plain_password() -> None:
@@ -87,3 +94,46 @@ def test_tokens_created_at_same_moment_are_unique() -> None:
     settings = get_settings()
 
     assert create_refresh_token(5, settings) != create_refresh_token(5, settings)
+
+
+def test_decode_refresh_token_returns_user_id() -> None:
+    settings = get_settings()
+
+    assert decode_refresh_token(create_refresh_token(5, settings), settings) == 5
+
+
+def _token_without_jti() -> str:
+    settings = get_settings()
+    now = datetime.now(UTC)
+    payload = {
+        "sub": "5",
+        "type": "refresh",
+        "iat": now,
+        "exp": now + timedelta(days=1),
+    }
+    return jwt.encode(
+        payload, settings.SECRET_KEY.get_secret_value(), algorithm=JWT_ALGORITHM
+    )
+
+
+@pytest.mark.parametrize(
+    "make_token",
+    [
+        lambda s: create_access_token(5, s),
+        lambda s: _create_jwt_token(5, "refresh", timedelta(seconds=-1), s),
+        lambda s: create_refresh_token(5, s)[:-2] + "xx",
+        lambda s: create_refresh_token(
+            5, s.model_copy(update={"SECRET_KEY": SecretStr("x" * 64)})
+        ),
+        lambda s: _token_without_jti(),
+        lambda s: "not-a-jwt",
+    ],
+    ids=["access_token", "expired", "tampered", "other_key", "no_jti", "garbage"],
+)
+def test_decode_refresh_token_rejects_invalid_token(
+    make_token: Callable[[Settings], str],
+) -> None:
+    settings = get_settings()
+
+    with pytest.raises(InvalidRefreshTokenError):
+        decode_refresh_token(make_token(settings), settings)
