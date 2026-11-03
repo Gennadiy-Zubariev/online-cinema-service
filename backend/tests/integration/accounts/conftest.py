@@ -6,9 +6,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.accounts.models import ActivationToken, User, UserGroup, UserGroupEnum
-from src.accounts.security import hash_token
+from src.accounts.security import hash_password, hash_token
 
 RAW_ACTIVATION_TOKEN = "raw-activation-token"
+USER_PASSWORD = "StrongPass1!"
 
 CreateUser = Callable[..., Awaitable[User]]
 
@@ -18,6 +19,7 @@ def create_user(db_session: AsyncSession) -> CreateUser:
     """Factory: save a user (optionally with an activation token) directly in DB.
 
     Bypasses the register endpoint, so tests control `is_active` and token expiry.
+    The password is always `USER_PASSWORD` (real argon2 hash, so login works).
     `token_expires_in=None` creates the user without an activation token.
     """
 
@@ -31,7 +33,7 @@ def create_user(db_session: AsyncSession) -> CreateUser:
         )
         user = User(
             email=email,
-            hashed_password="not-a-real-hash",
+            hashed_password=hash_password(USER_PASSWORD),
             is_active=is_active,
             group=group,
         )

@@ -2,7 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from src.accounts.models import User
-from src.accounts.schemas import UserRegisterRequest, UserResponse
+from src.accounts.schemas import LoginRequest, UserRegisterRequest, UserResponse
 
 VALID_PASSWORD = "StrongPass1!"
 
@@ -45,3 +45,16 @@ def test_user_response_is_built_from_model_without_password() -> None:
         "email": "user@example.com",
         "is_active": False,
     }
+
+
+def test_login_request_lowercases_email() -> None:
+    data = LoginRequest(email="User@Example.COM", password=VALID_PASSWORD)
+
+    assert data.email == "user@example.com"
+
+
+def test_login_request_does_not_check_password_strength() -> None:
+    # Strength is enforced only where a password is set, not at login.
+    data = LoginRequest(email="user@example.com", password="weak")
+
+    assert data.password == "weak"
