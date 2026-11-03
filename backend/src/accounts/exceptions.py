@@ -16,3 +16,11 @@ class InvalidActivationTokenError(AccountsError):
 
 class ActivationTokenExpiredError(AccountsError):
     """Raised when the activation token has expired."""
+
+
+class InvalidCredentialsError(AccountsError):
+    """Raised when the email is unknown or the password is wrong."""
+
+
+class UserNotActiveError(AccountsError):
+    """Raised when credentials are valid but the account is not activated."""

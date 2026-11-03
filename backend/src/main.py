@@ -4,11 +4,15 @@ from src.accounts.exception_handlers import (
     user_already_exists_handler,
     invalid_activation_token_handler,
     expired_activation_token_handler,
+    invalid_credentials_handler,
+    user_not_active_handler,
 )
 from src.accounts.exceptions import (
     UserAlreadyExistsError,
     InvalidActivationTokenError,
     ActivationTokenExpiredError,
+    InvalidCredentialsError,
+    UserNotActiveError,
 )
 from src.accounts.router import router as accounts_router
 from src.config.settings import get_settings
@@ -26,6 +30,8 @@ app = FastAPI(
 app.add_exception_handler(UserAlreadyExistsError, user_already_exists_handler)
 app.add_exception_handler(InvalidActivationTokenError, invalid_activation_token_handler)
 app.add_exception_handler(ActivationTokenExpiredError, expired_activation_token_handler)
+app.add_exception_handler(InvalidCredentialsError, invalid_credentials_handler)
+app.add_exception_handler(UserNotActiveError, user_not_active_handler)
 
 
 @app.get("/health")

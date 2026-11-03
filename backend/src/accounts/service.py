@@ -11,10 +11,28 @@ from src.accounts.exceptions import (
     UserAlreadyExistsError,
     ActivationTokenExpiredError,
     InvalidActivationTokenError,
+    InvalidCredentialsError,
+    UserNotActiveError,
 )
-from src.accounts.models import ActivationToken, User, UserGroup, UserGroupEnum
-from src.accounts.schemas import UserRegisterRequest, ResendActivationRequest
-from src.accounts.security import generate_token, hash_password, hash_token
+from src.accounts.models import (
+    ActivationToken,
+    User,
+    UserGroup,
+    UserGroupEnum,
+    RefreshToken,
+)
+from src.accounts.schemas import (
+    UserRegisterRequest,
+    ResendActivationRequest,
+    LoginRequest,
+)
+from src.accounts.security import (
+    generate_token,
+    hash_password,
+    hash_token,
+    create_access_token,
+    verify_password,
+)
 from src.config.settings import Settings
 from src.tasks.emails import send_activation_email
 
@@ -96,3 +114,33 @@ async def resend_activation_token(
     )
     await db.commit()
     send_activation_email.delay(user.email, raw_token)
+
+
+async def login_user(
+    db: AsyncSession,
+    data: LoginRequest,
+    settings: Settings,
+) -> tuple[str, str]:
+    user = await db.scalar(select(User).where(User.email == data.email))
+    if user is None:
+        raise InvalidCredentialsError()
+
+    is_password_valid = await run_in_threadpool(
+        verify_password, data.password, user.hashed_password
+    )
+    if not is_password_valid:
+        raise InvalidCredentialsError()
+    if not user.is_active:
+        raise UserNotActiveError()
+
+    raw_refresh_token = generate_token()
+    db.add(
+        RefreshToken(
+            user_id=user.id,
+            token_hash=hash_token(raw_refresh_token),
+            expires_at=datetime.now(UTC)
+            + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+        )
+    )
+    await db.commit()
+    return create_access_token(user.id, settings), raw_refresh_token

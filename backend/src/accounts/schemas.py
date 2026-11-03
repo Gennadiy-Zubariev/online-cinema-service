@@ -35,3 +35,13 @@ class ResendActivationRequest(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class LoginRequest(BaseModel):
+    email: NormalizedEmail
+    password: str = Field(min_length=1, max_length=128)
+
+
+class AccessTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
