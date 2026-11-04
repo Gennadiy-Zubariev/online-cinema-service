@@ -2,6 +2,7 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field
 
+from src.accounts.models import UserGroupEnum
 from src.accounts.validators import validate_password_strength
 
 NormalizedEmail = Annotated[EmailStr, AfterValidator(str.lower)]
@@ -59,3 +60,7 @@ class PasswordResetRequest(BaseModel):
 class PasswordResetCompleteRequest(BaseModel):
     token: str = Field(min_length=1, max_length=128)
     new_password: StrongPassword
+
+
+class UserGroupUpdateRequest(BaseModel):
+    group: UserGroupEnum

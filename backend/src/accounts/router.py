@@ -1,8 +1,8 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Response, status, Cookie
+from fastapi import APIRouter, Response, status, Cookie, Depends
 
-from src.accounts.dependencies import CurrentUser
+from src.accounts.dependencies import CurrentUser, get_current_admin
 from src.accounts.exceptions import InvalidRefreshTokenError
 from src.accounts.models import User
 from src.accounts.schemas import (
@@ -16,6 +16,7 @@ from src.accounts.schemas import (
     ChangePasswordRequest,
     PasswordResetRequest,
     PasswordResetCompleteRequest,
+    UserGroupUpdateRequest,
 )
 from src.accounts.service import (
     register_user,
@@ -27,6 +28,7 @@ from src.accounts.service import (
     change_user_password,
     request_password_reset,
     reset_password,
+    change_user_group,
 )
 from src.config.settings import SettingsDep
 from src.database.session import DbSession
@@ -173,3 +175,16 @@ async def password_reset_complete(
 ) -> MessageResponse:
     await reset_password(db=db, data=data)
     return MessageResponse(message="Password has been reset successfully.")
+
+
+@router.patch(
+    "/users/{user_id}/group",
+    response_model=MessageResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(get_current_admin)],
+)
+async def update_user_group(
+    user_id: int, data: UserGroupUpdateRequest, db: DbSession
+) -> MessageResponse:
+    await change_user_group(db=db, user_id=user_id, group_name=data.group)
+    return MessageResponse(message="User group updated.")

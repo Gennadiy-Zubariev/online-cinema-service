@@ -16,6 +16,7 @@ from src.accounts.exceptions import (
     InvalidRefreshTokenError,
     IncorrectPasswordError,
     InvalidPasswordResetTokenError,
+    UserNotFoundError,
 )
 from src.accounts.models import (
     ActivationToken,
@@ -232,4 +233,16 @@ async def reset_password(db: AsyncSession, data: PasswordResetCompleteRequest) -
         hash_password, data.new_password
     )
     await db.delete(reset_token)
+    await db.commit()
+
+
+async def change_user_group(
+    db: AsyncSession, user_id: int, group_name: UserGroupEnum
+) -> None:
+    user = await db.get(User, user_id)
+    if user is None:
+        raise UserNotFoundError()
+
+    result = await db.execute(select(UserGroup).where(UserGroup.name == group_name))
+    user.group = result.scalar_one()
     await db.commit()

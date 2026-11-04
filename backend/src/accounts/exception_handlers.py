@@ -79,3 +79,17 @@ async def invalid_password_reset_token_handler(
             "Please request a new one."
         },
     )
+
+
+async def permission_denied_handler(request: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={"detail": "You do not have permission to perform this action."},
+    )
+
+
+async def user_not_found_handler(request: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"detail": "User not found."},
+    )

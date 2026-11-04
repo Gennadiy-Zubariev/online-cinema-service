@@ -40,3 +40,11 @@ class IncorrectPasswordError(AccountsError):
 
 class InvalidPasswordResetTokenError(AccountsError):
     """Raised when the password reset token is unknown, used or expired."""
+
+
+class PermissionDeniedError(AccountsError):
+    """Raised when the user's group is not allowed to perform the action."""
+
+
+class UserNotFoundError(AccountsError):
+    """Raised when no user exists with the given id."""

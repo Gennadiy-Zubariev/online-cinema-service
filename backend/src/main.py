@@ -10,6 +10,8 @@ from src.accounts.exception_handlers import (
     invalid_access_token_handler,
     incorrect_password_handler,
     invalid_password_reset_token_handler,
+    permission_denied_handler,
+    user_not_found_handler,
 )
 from src.accounts.exceptions import (
     UserAlreadyExistsError,
@@ -21,6 +23,8 @@ from src.accounts.exceptions import (
     InvalidAccessTokenError,
     IncorrectPasswordError,
     InvalidPasswordResetTokenError,
+    PermissionDeniedError,
+    UserNotFoundError,
 )
 from src.accounts.router import router as accounts_router
 from src.config.settings import get_settings
@@ -46,6 +50,8 @@ app.add_exception_handler(IncorrectPasswordError, incorrect_password_handler)
 app.add_exception_handler(
     InvalidPasswordResetTokenError, invalid_password_reset_token_handler
 )
+app.add_exception_handler(PermissionDeniedError, permission_denied_handler)
+app.add_exception_handler(UserNotFoundError, user_not_found_handler)
 
 
 @app.get("/health")
