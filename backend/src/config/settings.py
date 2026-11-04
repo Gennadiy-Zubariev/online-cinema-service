@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
 
     ACTIVATION_TOKEN_EXPIRE_HOURS: int = 24
+    PASSWORD_RESET_TOKEN_EXPIRE_HOURS: int = 1
 
     SECRET_KEY: SecretStr
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15

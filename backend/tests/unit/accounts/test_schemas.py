@@ -5,6 +5,7 @@ from src.accounts.models import User
 from src.accounts.schemas import (
     ChangePasswordRequest,
     LoginRequest,
+    PasswordResetCompleteRequest,
     UserRegisterRequest,
     UserResponse,
 )
@@ -75,3 +76,8 @@ def test_change_password_request_does_not_check_old_password_strength() -> None:
     data = ChangePasswordRequest(old_password="weak", new_password=VALID_PASSWORD)
 
     assert data.old_password == "weak"
+
+
+def test_password_reset_complete_request_rejects_weak_password() -> None:
+    with pytest.raises(ValidationError, match="uppercase"):
+        PasswordResetCompleteRequest(token="raw-token", new_password="weakpass1!")

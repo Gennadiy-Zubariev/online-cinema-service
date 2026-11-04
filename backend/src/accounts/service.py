@@ -15,6 +15,7 @@ from src.accounts.exceptions import (
     UserNotActiveError,
     InvalidRefreshTokenError,
     IncorrectPasswordError,
+    InvalidPasswordResetTokenError,
 )
 from src.accounts.models import (
     ActivationToken,
@@ -22,12 +23,15 @@ from src.accounts.models import (
     UserGroup,
     UserGroupEnum,
     RefreshToken,
+    PasswordResetToken,
 )
 from src.accounts.schemas import (
     UserRegisterRequest,
     ResendActivationRequest,
     LoginRequest,
     ChangePasswordRequest,
+    PasswordResetRequest,
+    PasswordResetCompleteRequest,
 )
 from src.accounts.security import (
     generate_token,
@@ -39,7 +43,7 @@ from src.accounts.security import (
     decode_refresh_token,
 )
 from src.config.settings import Settings
-from src.tasks.emails import send_activation_email
+from src.tasks.emails import send_activation_email, send_password_reset_email
 
 
 async def register_user(
@@ -186,4 +190,46 @@ async def change_user_password(
     current_user.hashed_password = await run_in_threadpool(
         hash_password, data.new_password
     )
+    await db.commit()
+
+
+async def request_password_reset(
+    db: AsyncSession,
+    data: PasswordResetRequest,
+    settings: Settings,
+) -> None:
+    user = await db.scalar(
+        select(User)
+        .where(User.email == data.email)
+        .options(joinedload(User.password_reset_token))
+    )
+    if user is None or not user.is_active:
+        return
+    if user.password_reset_token is not None:
+        await db.delete(user.password_reset_token)
+        await db.flush()
+
+    raw_token = generate_token()
+    user.password_reset_token = PasswordResetToken(
+        token_hash=hash_token(raw_token),
+        expires_at=datetime.now(UTC)
+        + timedelta(hours=settings.PASSWORD_RESET_TOKEN_EXPIRE_HOURS),
+    )
+    await db.commit()
+    send_password_reset_email.delay(user.email, raw_token)
+
+
+async def reset_password(db: AsyncSession, data: PasswordResetCompleteRequest) -> None:
+    reset_token = await db.scalar(
+        select(PasswordResetToken)
+        .where(PasswordResetToken.token_hash == hash_token(data.token))
+        .options(joinedload(PasswordResetToken.user))
+    )
+    if reset_token is None or reset_token.expires_at < datetime.now(UTC):
+        raise InvalidPasswordResetTokenError()
+
+    reset_token.user.hashed_password = await run_in_threadpool(
+        hash_password, data.new_password
+    )
+    await db.delete(reset_token)
     await db.commit()

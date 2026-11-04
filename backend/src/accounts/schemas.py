@@ -50,3 +50,12 @@ class AccessTokenResponse(BaseModel):
 class ChangePasswordRequest(BaseModel):
     old_password: str = Field(min_length=1, max_length=128)
     new_password: StrongPassword
+
+
+class PasswordResetRequest(BaseModel):
+    email: NormalizedEmail
+
+
+class PasswordResetCompleteRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=128)
+    new_password: StrongPassword

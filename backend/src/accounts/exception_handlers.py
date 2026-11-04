@@ -67,3 +67,15 @@ async def incorrect_password_handler(request: Request, exc: Exception) -> JSONRe
         status_code=status.HTTP_400_BAD_REQUEST,
         content={"detail": "Old password is incorrect."},
     )
+
+
+async def invalid_password_reset_token_handler(
+    request: Request, exc: Exception
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={
+            "detail": "Invalid or expired password reset token. "
+            "Please request a new one."
+        },
+    )

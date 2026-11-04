@@ -36,3 +36,7 @@ class InvalidAccessTokenError(AccountsError):
 
 class IncorrectPasswordError(AccountsError):
     """Raised when the current (old) password does not match."""
+
+
+class InvalidPasswordResetTokenError(AccountsError):
+    """Raised when the password reset token is unknown, used or expired."""

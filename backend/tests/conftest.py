@@ -89,8 +89,17 @@ def send_activation_email_mock(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
 
 
 @pytest.fixture
+def send_password_reset_email_mock(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    task_mock = MagicMock()
+    monkeypatch.setattr("src.accounts.service.send_password_reset_email", task_mock)
+    return task_mock
+
+
+@pytest.fixture
 async def client(
-    db_session: AsyncSession, send_activation_email_mock: MagicMock
+    db_session: AsyncSession,
+    send_activation_email_mock: MagicMock,
+    send_password_reset_email_mock: MagicMock,
 ) -> AsyncGenerator[AsyncClient]:
     async def override_get_db() -> AsyncGenerator[AsyncSession]:
         yield db_session

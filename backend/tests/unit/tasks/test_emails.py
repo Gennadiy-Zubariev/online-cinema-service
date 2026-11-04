@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.config.settings import get_settings
-from src.tasks.emails import send_activation_email
+from src.tasks.emails import send_activation_email, send_password_reset_email
 
 
 def test_send_activation_email_sends_link_with_token(
@@ -20,3 +20,19 @@ def test_send_activation_email_sends_link_with_token(
     assert to == "user@example.com"
     assert subject == "Activate your account"
     assert f"{get_settings().FRONTEND_URL}/activate?token=raw-token" in html_body
+
+
+def test_send_password_reset_email_sends_link_with_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    send_email_mock = MagicMock()
+    monkeypatch.setattr("src.tasks.emails.send_email", send_email_mock)
+
+    send_password_reset_email("user@example.com", "raw-token")
+
+    send_email_mock.assert_called_once()
+    to, subject, html_body, _ = send_email_mock.call_args.args
+    assert to == "user@example.com"
+    assert subject == "Reset your password"
+    reset_link = f"{get_settings().FRONTEND_URL}/reset-password?token=raw-token"
+    assert reset_link in html_body
