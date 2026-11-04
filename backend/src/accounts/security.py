@@ -5,7 +5,7 @@ from datetime import datetime, UTC, timedelta
 import jwt
 from pwdlib import PasswordHash
 
-from src.accounts.exceptions import InvalidRefreshTokenError
+from src.accounts.exceptions import InvalidRefreshTokenError, InvalidAccessTokenError
 from src.config.settings import Settings
 
 JWT_ALGORITHM = "HS256"
@@ -62,17 +62,27 @@ def create_refresh_token(user_id: int, settings: Settings) -> str:
     )
 
 
+def _decode_jwt_token(token: str, token_type: str, settings: Settings) -> int:
+    payload = jwt.decode(
+        token,
+        settings.SECRET_KEY.get_secret_value(),
+        algorithms=[JWT_ALGORITHM],
+        options={"require": ["exp", "iat", "sub", "type", "jti"]},
+    )
+    if payload["type"] != token_type:
+        raise jwt.InvalidTokenError("Unexpected token type")
+    return int(payload["sub"])
+
+
+def decode_access_token(token: str, settings: Settings) -> int:
+    try:
+        return _decode_jwt_token(token, "access", settings)
+    except jwt.InvalidTokenError as error:
+        raise InvalidAccessTokenError() from error
+
+
 def decode_refresh_token(token: str, settings: Settings) -> int:
     try:
-        payload = jwt.decode(
-            token,
-            settings.SECRET_KEY.get_secret_value(),
-            algorithms=[JWT_ALGORITHM],
-            options={"require": ["exp", "iat", "sub", "type", "jti"]},
-        )
+        return _decode_jwt_token(token, "refresh", settings)
     except jwt.InvalidTokenError as error:
         raise InvalidRefreshTokenError() from error
-
-    if payload["type"] != "refresh":
-        raise InvalidRefreshTokenError()
-    return int(payload["sub"])

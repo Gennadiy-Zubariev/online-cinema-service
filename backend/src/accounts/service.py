@@ -14,6 +14,7 @@ from src.accounts.exceptions import (
     InvalidCredentialsError,
     UserNotActiveError,
     InvalidRefreshTokenError,
+    IncorrectPasswordError,
 )
 from src.accounts.models import (
     ActivationToken,
@@ -26,6 +27,7 @@ from src.accounts.schemas import (
     UserRegisterRequest,
     ResendActivationRequest,
     LoginRequest,
+    ChangePasswordRequest,
 )
 from src.accounts.security import (
     generate_token,
@@ -168,3 +170,20 @@ async def refresh_access_token(
     if token_id is None:
         raise InvalidRefreshTokenError()
     return create_access_token(user_id=user_id, settings=settings)
+
+
+async def change_user_password(
+    db: AsyncSession,
+    current_user: User,
+    data: ChangePasswordRequest,
+) -> None:
+    is_old_password_valid = await run_in_threadpool(
+        verify_password, data.old_password, current_user.hashed_password
+    )
+    if not is_old_password_valid:
+        raise IncorrectPasswordError()
+
+    current_user.hashed_password = await run_in_threadpool(
+        hash_password, data.new_password
+    )
+    await db.commit()

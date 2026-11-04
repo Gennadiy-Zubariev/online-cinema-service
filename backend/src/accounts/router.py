@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Response, status, Cookie
 
+from src.accounts.dependencies import CurrentUser
 from src.accounts.exceptions import InvalidRefreshTokenError
 from src.accounts.models import User
 from src.accounts.schemas import (
@@ -12,6 +13,7 @@ from src.accounts.schemas import (
     ResendActivationRequest,
     AccessTokenResponse,
     LoginRequest,
+    ChangePasswordRequest,
 )
 from src.accounts.service import (
     register_user,
@@ -20,6 +22,7 @@ from src.accounts.service import (
     login_user,
     logout_user,
     refresh_access_token,
+    change_user_password,
 )
 from src.config.settings import SettingsDep
 from src.database.session import DbSession
@@ -128,3 +131,15 @@ async def refresh(
     )
 
     return AccessTokenResponse(access_token=access_token)
+
+
+@router.post(
+    "/change-password",
+    status_code=status.HTTP_200_OK,
+    response_model=MessageResponse
+)
+async def change_password(
+    db: DbSession, current_user: CurrentUser, data: ChangePasswordRequest
+) -> MessageResponse:
+    await change_user_password(db=db, current_user=current_user, data=data)
+    return MessageResponse(message="Password changed successfully.")

@@ -50,3 +50,20 @@ async def invalid_refresh_token_handler(
         content={"detail": "Invalid or expired refresh token. Please log in again."},
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+async def invalid_access_token_handler(
+    request: Request, exc: Exception
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        content={"detail": "Invalid or expired access token."},
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+async def incorrect_password_handler(request: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={"detail": "Old password is incorrect."},
+    )

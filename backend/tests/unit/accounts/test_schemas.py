@@ -2,7 +2,12 @@ import pytest
 from pydantic import ValidationError
 
 from src.accounts.models import User
-from src.accounts.schemas import LoginRequest, UserRegisterRequest, UserResponse
+from src.accounts.schemas import (
+    ChangePasswordRequest,
+    LoginRequest,
+    UserRegisterRequest,
+    UserResponse,
+)
 
 VALID_PASSWORD = "StrongPass1!"
 
@@ -58,3 +63,15 @@ def test_login_request_does_not_check_password_strength() -> None:
     data = LoginRequest(email="user@example.com", password="weak")
 
     assert data.password == "weak"
+
+
+def test_change_password_request_rejects_weak_new_password() -> None:
+    with pytest.raises(ValidationError, match="uppercase"):
+        ChangePasswordRequest(old_password=VALID_PASSWORD, new_password="weakpass1!")
+
+
+def test_change_password_request_does_not_check_old_password_strength() -> None:
+    # The old password was set under possibly different rules.
+    data = ChangePasswordRequest(old_password="weak", new_password=VALID_PASSWORD)
+
+    assert data.old_password == "weak"

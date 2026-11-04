@@ -6,12 +6,13 @@ import jwt
 import pytest
 from pydantic import SecretStr
 
-from src.accounts.exceptions import InvalidRefreshTokenError
+from src.accounts.exceptions import InvalidAccessTokenError, InvalidRefreshTokenError
 from src.accounts.security import (
     JWT_ALGORITHM,
     _create_jwt_token,
     create_access_token,
     create_refresh_token,
+    decode_access_token,
     decode_refresh_token,
     generate_token,
     hash_password,
@@ -137,3 +138,31 @@ def test_decode_refresh_token_rejects_invalid_token(
 
     with pytest.raises(InvalidRefreshTokenError):
         decode_refresh_token(make_token(settings), settings)
+
+
+def test_decode_access_token_returns_user_id() -> None:
+    settings = get_settings()
+
+    assert decode_access_token(create_access_token(5, settings), settings) == 5
+
+
+@pytest.mark.parametrize(
+    "make_token",
+    [
+        lambda s: create_refresh_token(5, s),
+        lambda s: _create_jwt_token(5, "access", timedelta(seconds=-1), s),
+        lambda s: create_access_token(5, s)[:-2] + "xx",
+        lambda s: create_access_token(
+            5, s.model_copy(update={"SECRET_KEY": SecretStr("x" * 64)})
+        ),
+        lambda s: "not-a-jwt",
+    ],
+    ids=["refresh_token", "expired", "tampered", "other_key", "garbage"],
+)
+def test_decode_access_token_rejects_invalid_token(
+    make_token: Callable[[Settings], str],
+) -> None:
+    settings = get_settings()
+
+    with pytest.raises(InvalidAccessTokenError):
+        decode_access_token(make_token(settings), settings)

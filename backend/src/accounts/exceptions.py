@@ -28,3 +28,11 @@ class UserNotActiveError(AccountsError):
 
 class InvalidRefreshTokenError(AccountsError):
     """Raised when the refresh token is missing, invalid, expired or revoked."""
+
+
+class InvalidAccessTokenError(AccountsError):
+    """Raised when the access token is malformed, tampered with or expired."""
+
+
+class IncorrectPasswordError(AccountsError):
+    """Raised when the current (old) password does not match."""
