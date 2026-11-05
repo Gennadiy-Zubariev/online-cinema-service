@@ -16,6 +16,8 @@ from src.accounts.exception_handlers import (
     invalid_password_reset_token_handler,
     permission_denied_handler,
     user_not_found_handler,
+    unsupported_avatar_type_handler,
+    avatar_too_large_handler,
 )
 from src.accounts.exceptions import (
     UserAlreadyExistsError,
@@ -29,6 +31,8 @@ from src.accounts.exceptions import (
     InvalidPasswordResetTokenError,
     PermissionDeniedError,
     UserNotFoundError,
+    UnsupportedAvatarTypeError,
+    AvatarTooLargeError,
 )
 from src.accounts.router import router as accounts_router
 from src.config.settings import get_settings
@@ -61,6 +65,8 @@ app.add_exception_handler(
 )
 app.add_exception_handler(PermissionDeniedError, permission_denied_handler)
 app.add_exception_handler(UserNotFoundError, user_not_found_handler)
+app.add_exception_handler(UnsupportedAvatarTypeError, unsupported_avatar_type_handler)
+app.add_exception_handler(AvatarTooLargeError, avatar_too_large_handler)
 
 
 @app.get("/health")

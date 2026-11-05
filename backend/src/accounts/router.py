@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Response, status, Cookie, Depends, Query
+from fastapi import APIRouter, Response, status, Cookie, Depends, Query, UploadFile
 
 from src.accounts.dependencies import CurrentUser, get_current_admin
 from src.accounts.exceptions import InvalidRefreshTokenError
@@ -37,6 +37,8 @@ from src.accounts.service import (
     list_users,
     get_user_profile,
     update_user_profile,
+    update_user_avatar,
+    MAX_AVATAR_SIZE,
 )
 from src.config.settings import SettingsDep
 from src.database.session import DbSession
@@ -262,4 +264,19 @@ async def update_profile(
     data: ProfileUpdateRequest, db: DbSession, current_user: CurrentUser
 ) -> ProfileResponse:
     profile = await update_user_profile(db=db, user_id=current_user.id, data=data)
+    return _to_profile_response(profile)
+
+
+@router.put(
+    "/profile/avatar",
+    response_model=ProfileResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def update_profile_avatar(
+    db: DbSession, current_user: CurrentUser, file: UploadFile
+) -> ProfileResponse:
+    data = await file.read(MAX_AVATAR_SIZE + 1)
+    profile = await update_user_avatar(
+        db=db, user_id=current_user.id, data=data, content_type=file.content_type
+    )
     return _to_profile_response(profile)
