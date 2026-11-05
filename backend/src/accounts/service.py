@@ -25,6 +25,7 @@ from src.accounts.models import (
     UserGroupEnum,
     RefreshToken,
     PasswordResetToken,
+    UserProfile,
 )
 from src.accounts.schemas import (
     UserRegisterRequest,
@@ -33,6 +34,7 @@ from src.accounts.schemas import (
     ChangePasswordRequest,
     PasswordResetRequest,
     PasswordResetCompleteRequest,
+    ProfileUpdateRequest,
 )
 from src.accounts.security import (
     generate_token,
@@ -276,3 +278,22 @@ async def list_users(
         .limit(page_size)
     )
     return list(result.all()), total or 0
+
+
+async def get_user_profile(db: AsyncSession, user_id: int) -> UserProfile | None:
+    return await db.scalar(select(UserProfile).where(UserProfile.user_id == user_id))
+
+
+async def update_user_profile(
+    db: AsyncSession, user_id: int, data: ProfileUpdateRequest
+) -> UserProfile:
+    profile = await get_user_profile(db=db, user_id=user_id)
+    if profile is None:
+        profile = UserProfile(user_id=user_id)
+        db.add(profile)
+
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(profile, field, value)
+
+    await db.commit()
+    return profile

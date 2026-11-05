@@ -1,9 +1,9 @@
-from datetime import datetime
+from datetime import datetime, date
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field, PastDate
 
-from src.accounts.models import UserGroupEnum
+from src.accounts.models import UserGroupEnum, GenderEnum
 from src.accounts.validators import validate_password_strength
 
 NormalizedEmail = Annotated[EmailStr, AfterValidator(str.lower)]
@@ -88,3 +88,20 @@ class UserListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class ProfileResponse(BaseModel):
+    first_name: str | None = None
+    last_name: str | None = None
+    gender: GenderEnum | None = None
+    date_of_birth: date | None = None
+    info: str | None = None
+    avatar_url: str | None = None
+
+
+class ProfileUpdateRequest(BaseModel):
+    first_name: str | None = Field(default=None, max_length=100)
+    last_name: str | None = Field(default=None, max_length=100)
+    gender: GenderEnum | None = None
+    date_of_birth: PastDate | None = None
+    info: str | None = Field(default=None, max_length=1000)

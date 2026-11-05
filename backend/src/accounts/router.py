@@ -4,7 +4,7 @@ from fastapi import APIRouter, Response, status, Cookie, Depends, Query
 
 from src.accounts.dependencies import CurrentUser, get_current_admin
 from src.accounts.exceptions import InvalidRefreshTokenError
-from src.accounts.models import User
+from src.accounts.models import User, UserProfile
 from src.accounts.schemas import (
     UserResponse,
     UserRegisterRequest,
@@ -19,6 +19,8 @@ from src.accounts.schemas import (
     UserGroupUpdateRequest,
     UserListResponse,
     UserAdminResponse,
+    ProfileResponse,
+    ProfileUpdateRequest,
 )
 from src.accounts.service import (
     register_user,
@@ -33,9 +35,12 @@ from src.accounts.service import (
     change_user_group,
     activate_user_manually,
     list_users,
+    get_user_profile,
+    update_user_profile,
 )
 from src.config.settings import SettingsDep
 from src.database.session import DbSession
+from src.storage.client import get_file_url
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
@@ -223,3 +228,38 @@ async def list_all_users(
         page=page,
         page_size=page_size,
     )
+
+
+def _to_profile_response(profile: UserProfile | None) -> ProfileResponse:
+    if profile is None:
+        return ProfileResponse()
+    return ProfileResponse(
+        first_name=profile.first_name,
+        last_name=profile.last_name,
+        gender=profile.gender,
+        date_of_birth=profile.date_of_birth,
+        info=profile.info,
+        avatar_url=get_file_url(profile.avatar) if profile.avatar else None,
+    )
+
+
+@router.get(
+    "/profile",
+    response_model=ProfileResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_profile(db: DbSession, current_user: CurrentUser) -> ProfileResponse:
+    profile = await get_user_profile(db=db, user_id=current_user.id)
+    return _to_profile_response(profile)
+
+
+@router.patch(
+    "/profile",
+    response_model=ProfileResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def update_profile(
+    data: ProfileUpdateRequest, db: DbSession, current_user: CurrentUser
+) -> ProfileResponse:
+    profile = await update_user_profile(db=db, user_id=current_user.id, data=data)
+    return _to_profile_response(profile)

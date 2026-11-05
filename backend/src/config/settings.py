@@ -43,6 +43,12 @@ class Settings(BaseSettings):
 
     FRONTEND_URL: str = "http://localhost:3000"
 
+    S3_ENDPOINT_URL: str = "http://localhost:9000"
+    S3_ACCESS_KEY: str
+    S3_SECRET_KEY: SecretStr
+    S3_BUCKET_NAME: str = "avatars"
+    S3_PUBLIC_ENDPOINT_URL: str = "http://localhost:9000"
+
     @property
     def database_url(self) -> URL:
         return URL.create(

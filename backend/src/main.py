@@ -1,4 +1,8 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
+from fastapi.concurrency import run_in_threadpool
 
 from src.accounts.exception_handlers import (
     user_already_exists_handler,
@@ -28,15 +32,20 @@ from src.accounts.exceptions import (
 )
 from src.accounts.router import router as accounts_router
 from src.config.settings import get_settings
+from src.storage.client import ensure_bucket_exists
 
 settings = get_settings()
 
 API_PREFIX = "/api/v1"
 
-app = FastAPI(
-    title=settings.PROJECT_NAME,
-    debug=settings.DEBUG,
-)
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    await run_in_threadpool(ensure_bucket_exists)
+    yield
+
+
+app = FastAPI(title=settings.PROJECT_NAME, debug=settings.DEBUG, lifespan=lifespan)
 
 # exception handlers
 app.add_exception_handler(UserAlreadyExistsError, user_already_exists_handler)
