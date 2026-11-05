@@ -27,15 +27,16 @@ def create_user(db_session: AsyncSession) -> CreateUser:
         email: str = "user@example.com",
         is_active: bool = False,
         token_expires_in: timedelta | None = timedelta(hours=24),
+        group: UserGroupEnum = UserGroupEnum.USER,
     ) -> User:
-        group = await db_session.scalar(
-            select(UserGroup).where(UserGroup.name == UserGroupEnum.USER)
+        user_group = await db_session.scalar(
+            select(UserGroup).where(UserGroup.name == group)
         )
         user = User(
             email=email,
             hashed_password=hash_password(USER_PASSWORD),
             is_active=is_active,
-            group=group,
+            group=user_group,
         )
         if token_expires_in is not None:
             user.activation_token = ActivationToken(

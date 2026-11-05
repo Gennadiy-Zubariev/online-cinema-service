@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field
@@ -64,3 +65,26 @@ class PasswordResetCompleteRequest(BaseModel):
 
 class UserGroupUpdateRequest(BaseModel):
     group: UserGroupEnum
+
+
+class UserGroupResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+
+
+class UserAdminResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+    is_active: bool
+    created_at: datetime
+    group: UserGroupResponse
+
+
+class UserListResponse(BaseModel):
+    items: list[UserAdminResponse]
+    total: int
+    page: int
+    page_size: int

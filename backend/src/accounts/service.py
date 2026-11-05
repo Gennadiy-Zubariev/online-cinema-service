@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi.concurrency import run_in_threadpool
 from psycopg.errors import UniqueViolation
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -246,3 +246,33 @@ async def change_user_group(
     result = await db.execute(select(UserGroup).where(UserGroup.name == group_name))
     user.group = result.scalar_one()
     await db.commit()
+
+
+async def activate_user_manually(db: AsyncSession, user_id: int) -> None:
+    user = await db.scalar(
+        select(User)
+        .where(User.id == user_id)
+        .options(joinedload(User.activation_token))
+    )
+    if user is None:
+        raise UserNotFoundError()
+
+    user.is_active = True
+    if user.activation_token is not None:
+        await db.delete(user.activation_token)
+    await db.commit()
+
+
+async def list_users(
+    db: AsyncSession, page: int, page_size: int
+) -> tuple[list[User], int]:
+    """Return (users on the page, total number of users)."""
+    total = await db.scalar(select(func.count()).select_from(User))
+    result = await db.scalars(
+        select(User)
+        .options(joinedload(User.group))
+        .order_by(User.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    return list(result.all()), total or 0

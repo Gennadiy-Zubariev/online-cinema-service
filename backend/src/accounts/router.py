@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Response, status, Cookie, Depends
+from fastapi import APIRouter, Response, status, Cookie, Depends, Query
 
 from src.accounts.dependencies import CurrentUser, get_current_admin
 from src.accounts.exceptions import InvalidRefreshTokenError
@@ -17,6 +17,8 @@ from src.accounts.schemas import (
     PasswordResetRequest,
     PasswordResetCompleteRequest,
     UserGroupUpdateRequest,
+    UserListResponse,
+    UserAdminResponse,
 )
 from src.accounts.service import (
     register_user,
@@ -29,6 +31,8 @@ from src.accounts.service import (
     request_password_reset,
     reset_password,
     change_user_group,
+    activate_user_manually,
+    list_users,
 )
 from src.config.settings import SettingsDep
 from src.database.session import DbSession
@@ -188,3 +192,34 @@ async def update_user_group(
 ) -> MessageResponse:
     await change_user_group(db=db, user_id=user_id, group_name=data.group)
     return MessageResponse(message="User group updated.")
+
+
+@router.post(
+    "/users/{user_id}/activate",
+    response_model=MessageResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(get_current_admin)],
+)
+async def activate_user(user_id: int, db: DbSession) -> MessageResponse:
+    await activate_user_manually(db=db, user_id=user_id)
+    return MessageResponse(message="User activated.")
+
+
+@router.get(
+    "/users",
+    response_model=UserListResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(get_current_admin)],
+)
+async def list_all_users(
+    db: DbSession,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> UserListResponse:
+    users, total = await list_users(db=db, page=page, page_size=page_size)
+    return UserListResponse(
+        items=[UserAdminResponse.model_validate(user) for user in users],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
