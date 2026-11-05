@@ -6,6 +6,7 @@ services:
       - ./backend/.env
     environment:
       POSTGRES_HOST: db
+      REDIS_HOST: redis
     volumes:
       - ./backend:/app
     depends_on:
@@ -19,6 +20,8 @@ services:
       - ./backend/.env
     environment:
       POSTGRES_HOST: db
+      REDIS_HOST: redis
+      S3_ENDPOINT_URL: http://minio:9000
     ports:
       - "8000:8000"
     volumes:
@@ -29,6 +32,8 @@ services:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
 
 
@@ -56,5 +61,61 @@ services:
       timeout: 5s
       retries: 5
 
+  worker:
+    build: ./backend
+    command: celery -A src.tasks.celery_app:celery_app worker --loglevel=info
+    env_file:
+      - ./backend/.env
+    environment:
+      POSTGRES_HOST: db
+      REDIS_HOST: redis
+      SMTP_HOST: mailpit
+    volumes:
+      - ./backend:/app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  beat:
+    build: ./backend
+    command: celery -A src.tasks.celery_app:celery_app beat --loglevel=info -s /tmp/celerybeat-schedule
+    env_file:
+      - ./backend/.env
+    environment:
+      REDIS_HOST: redis
+    volumes:
+      - ./backend:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  mailpit:
+    image: axllent/mailpit:v1.32
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  minio:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    command: server --console-address ":9001" /data
+    env_file:
+      - ./backend/.env
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # web console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+
 volumes:
   postgres_data:
+  minio_data:
