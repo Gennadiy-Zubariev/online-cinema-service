@@ -58,6 +58,11 @@ REFRESH_COOKIE_PATH = "/api/v1/accounts"
 async def register(
     db: DbSession, data: UserRegisterRequest, settings: SettingsDep
 ) -> User:
+    """Register a new user and send an activation email.
+
+    The account stays inactive until activated (link valid for 24 hours).
+    Returns 409 if the email is already registered.
+    """
     return await register_user(db=db, data=data, settings=settings)
 
 
@@ -67,6 +72,10 @@ async def register(
     status_code=status.HTTP_200_OK,
 )
 async def activate(db: DbSession, data: ActivationRequest) -> MessageResponse:
+    """Activate an account with the token from the activation email.
+
+    Returns 400 if the token is unknown, already used or expired.
+    """
     await activate_account(db=db, token=data.token)
     return MessageResponse(message="Account activated successfully.")
 
@@ -79,6 +88,11 @@ async def resend_activation(
     data: ResendActivationRequest,
     settings: SettingsDep,
 ) -> MessageResponse:
+    """Send a new activation email (new token valid for 24 hours).
+
+    Always returns the same response, so it does not reveal whether
+    the email is registered or already active.
+    """
     await resend_activation_token(db=db, data=data, settings=settings)
     return MessageResponse(
         message="If the account exists and is not activated, "
@@ -97,6 +111,12 @@ async def login(
     settings: SettingsDep,
     response: Response,
 ) -> AccessTokenResponse:
+    """Log in and receive a pair of JWT tokens.
+
+    The access token is returned in the body; the refresh token is set
+    as an httpOnly cookie. Returns 401 for wrong credentials and 403
+    if the account is not activated.
+    """
     access_token, refresh_token = await login_user(db=db, data=data, settings=settings)
     response.set_cookie(
         key=REFRESH_COOKIE_NAME,
@@ -120,6 +140,10 @@ async def logout(
     response: Response,
     refresh_token: Annotated[str | None, Cookie()] = None,
 ) -> None:
+    """Log out: revoke the refresh token from the cookie and clear it.
+
+    Idempotent: returns 204 even without a cookie or with an unknown token.
+    """
     if refresh_token is not None:
         await logout_user(db=db, refresh_token=refresh_token)
     response.delete_cookie(
@@ -141,6 +165,11 @@ async def refresh(
     settings: SettingsDep,
     refresh_token: Annotated[str | None, Cookie()] = None,
 ) -> AccessTokenResponse:
+    """Get a new access token using the refresh token from the cookie.
+
+    Returns 401 if the refresh token is missing, invalid, expired
+    or revoked by logout.
+    """
     if refresh_token is None:
         raise InvalidRefreshTokenError()
     access_token = await refresh_access_token(
@@ -156,6 +185,10 @@ async def refresh(
 async def change_password(
     db: DbSession, current_user: CurrentUser, data: ChangePasswordRequest
 ) -> MessageResponse:
+    """Change the current user's password (old password required).
+
+    Returns 400 if the old password is incorrect.
+    """
     await change_user_password(db=db, current_user=current_user, data=data)
     return MessageResponse(message="Password changed successfully.")
 
@@ -168,6 +201,11 @@ async def change_password(
 async def password_reset_request(
     db: DbSession, data: PasswordResetRequest, settings: SettingsDep
 ) -> MessageResponse:
+    """Send a password reset email (link valid for 1 hour).
+
+    Only for registered and active accounts. Always returns the same
+    response, so it does not reveal whether the email exists.
+    """
     await request_password_reset(db=db, data=data, settings=settings)
     return MessageResponse(
         message="If the account exists and is active, "
@@ -184,6 +222,10 @@ async def password_reset_complete(
     db: DbSession,
     data: PasswordResetCompleteRequest,
 ) -> MessageResponse:
+    """Set a new password with the token from the password reset email.
+
+    The token can be used once. Returns 400 if it is unknown or expired.
+    """
     await reset_password(db=db, data=data)
     return MessageResponse(message="Password has been reset successfully.")
 
@@ -197,6 +239,10 @@ async def password_reset_complete(
 async def update_user_group(
     user_id: int, data: UserGroupUpdateRequest, db: DbSession
 ) -> MessageResponse:
+    """Change a user's group (admin only).
+
+    Returns 404 if the user does not exist.
+    """
     await change_user_group(db=db, user_id=user_id, group_name=data.group)
     return MessageResponse(message="User group updated.")
 
@@ -208,6 +254,11 @@ async def update_user_group(
     dependencies=[Depends(get_current_admin)],
 )
 async def activate_user(user_id: int, db: DbSession) -> MessageResponse:
+    """Manually activate a user's account (admin only).
+
+    Removes the pending activation token. Already active users
+    get 200 as well. Returns 404 if the user does not exist.
+    """
     await activate_user_manually(db=db, user_id=user_id)
     return MessageResponse(message="User activated.")
 
@@ -223,6 +274,7 @@ async def list_all_users(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> UserListResponse:
+    """List all users with their groups, ordered by id (admin only)."""
     users, total = await list_users(db=db, page=page, page_size=page_size)
     return UserListResponse(
         items=[UserAdminResponse.model_validate(user) for user in users],
@@ -251,6 +303,10 @@ def _to_profile_response(profile: UserProfile | None) -> ProfileResponse:
     status_code=status.HTTP_200_OK,
 )
 async def get_profile(db: DbSession, current_user: CurrentUser) -> ProfileResponse:
+    """Get the current user's profile.
+
+    Returns an empty profile (all fields null) if it was never filled in.
+    """
     profile = await get_user_profile(db=db, user_id=current_user.id)
     return _to_profile_response(profile)
 
@@ -263,6 +319,11 @@ async def get_profile(db: DbSession, current_user: CurrentUser) -> ProfileRespon
 async def update_profile(
     data: ProfileUpdateRequest, db: DbSession, current_user: CurrentUser
 ) -> ProfileResponse:
+    """Partially update the current user's profile.
+
+    Only the sent fields change; an explicit null clears a field.
+    The profile is created on the first update.
+    """
     profile = await update_user_profile(db=db, user_id=current_user.id, data=data)
     return _to_profile_response(profile)
 
@@ -275,6 +336,11 @@ async def update_profile(
 async def update_profile_avatar(
     db: DbSession, current_user: CurrentUser, file: UploadFile
 ) -> ProfileResponse:
+    """Upload or replace the current user's avatar.
+
+    Accepts JPEG, PNG or WebP up to 2 MB (415 / 413 otherwise).
+    The previous avatar file is deleted.
+    """
     data = await file.read(MAX_AVATAR_SIZE + 1)
     profile = await update_user_avatar(
         db=db, user_id=current_user.id, data=data, content_type=file.content_type
