@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     S3_SECRET_KEY: SecretStr
     S3_BUCKET_NAME: str = "avatars"
     S3_PUBLIC_ENDPOINT_URL: str = "http://localhost:9000"
+    S3_REGION: str = "us-east-1"
 
     @property
     def database_url(self) -> URL:

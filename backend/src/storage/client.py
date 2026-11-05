@@ -1,4 +1,5 @@
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from mypy_boto3_s3 import S3Client
 
@@ -11,8 +12,10 @@ def _create_client(endpoint_url: str, settings: Settings) -> S3Client:
     return boto3.client(
         "s3",
         endpoint_url=endpoint_url,
+        region_name=settings.S3_REGION,
         aws_access_key_id=settings.S3_ACCESS_KEY,
         aws_secret_access_key=settings.S3_SECRET_KEY.get_secret_value(),
+        config=Config(signature_version="s3v4"),
     )
 
 
