@@ -82,7 +82,7 @@ async def register_user(
         await db.rollback()
         if isinstance(error.orig, UniqueViolation):
             raise UserAlreadyExistsError(data.email) from error
-        raise  # not an email conflict — propagate as 500
+        raise
 
     send_activation_email.delay(user.email, raw_token)
     return user

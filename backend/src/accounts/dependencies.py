@@ -35,3 +35,9 @@ async def get_current_admin(user: CurrentUser) -> User:
     if user.group.name != UserGroupEnum.ADMIN:
         raise PermissionDeniedError()
     return user
+
+
+async def get_current_moderator(user: CurrentUser) -> User:
+    if user.group.name not in (UserGroupEnum.MODERATOR, UserGroupEnum.ADMIN):
+        raise PermissionDeniedError()
+    return user
