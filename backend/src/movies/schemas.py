@@ -16,3 +16,10 @@ class NamedEntityResponse(BaseModel):
     name: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class NamedEntityListResponse(BaseModel):
+    items: list[NamedEntityResponse]
+    total: int
+    page: int
+    page_size: int
