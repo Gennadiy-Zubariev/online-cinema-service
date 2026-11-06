@@ -19,7 +19,7 @@ class Genre(Base):
     __tablename__ = "genres"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(100), unique=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True)
 
     movies: Mapped[list["Movie"]] = relationship(
         secondary="movie_genres", back_populates="genres"
@@ -52,7 +52,7 @@ class Certification(Base):
     __tablename__ = "certifications"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(50), unique=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True)
 
     movies: Mapped[list["Movie"]] = relationship(back_populates="certification")
 

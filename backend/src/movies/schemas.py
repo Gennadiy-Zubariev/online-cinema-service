@@ -2,16 +2,16 @@ from typing import Annotated
 
 from pydantic import BaseModel, StringConstraints, ConfigDict
 
-GenreName = Annotated[
-    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
+EntityName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)
 ]
 
 
-class GenreRequest(BaseModel):
-    name: GenreName
+class NamedEntityRequest(BaseModel):
+    name: EntityName
 
 
-class GenreResponse(BaseModel):
+class NamedEntityResponse(BaseModel):
     id: int
     name: str
 
