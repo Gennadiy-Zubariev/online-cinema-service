@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.accounts.models import PasswordResetToken, User
 from src.accounts.security import hash_token
 from src.config.settings import get_settings
-from tests.integration.accounts.conftest import USER_PASSWORD, CreateUser
+from tests.integration.conftest import USER_PASSWORD, CreateUser
 
 LOGIN_URL = "/api/v1/accounts/login"
 REQUEST_URL = "/api/v1/accounts/password-reset/request"

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.accounts.models import RefreshToken
 from src.accounts.security import hash_token
-from tests.integration.accounts.conftest import USER_PASSWORD, CreateUser
+from tests.integration.conftest import USER_PASSWORD, CreateUser
 
 LOGIN_URL = "/api/v1/accounts/login"
 LOGOUT_URL = "/api/v1/accounts/logout"

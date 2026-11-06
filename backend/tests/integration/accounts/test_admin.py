@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.accounts.models import ActivationToken, User, UserGroup, UserGroupEnum
 from src.accounts.security import create_access_token
 from src.config.settings import get_settings
-from tests.integration.accounts.conftest import CreateUser
+from tests.integration.conftest import CreateUser
 
 USERS_URL = "/api/v1/accounts/users"
 PERMISSION_DENIED = {"detail": "You do not have permission to perform this action."}

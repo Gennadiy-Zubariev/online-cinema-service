@@ -54,7 +54,9 @@ class Certification(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255), unique=True)
 
-    movies: Mapped[list["Movie"]] = relationship(back_populates="certification")
+    movies: Mapped[list["Movie"]] = relationship(
+        back_populates="certification", passive_deletes="all"
+    )
 
 
 movie_genres = Table(

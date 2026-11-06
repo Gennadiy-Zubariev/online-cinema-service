@@ -238,7 +238,7 @@ async def password_reset_complete(
     dependencies=[Depends(get_current_admin)],
 )
 async def update_user_group(
-    user_id: int, data: UserGroupUpdateRequest, db: DbSession
+    db: DbSession, user_id: int, data: UserGroupUpdateRequest
 ) -> MessageResponse:
     """Change a user's group (admin only).
 
@@ -254,7 +254,7 @@ async def update_user_group(
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(get_current_admin)],
 )
-async def activate_user(user_id: int, db: DbSession) -> MessageResponse:
+async def activate_user(db: DbSession, user_id: int) -> MessageResponse:
     """Manually activate a user's account (admin only).
 
     Removes the pending activation token. Already active users
@@ -316,7 +316,7 @@ async def get_profile(db: DbSession, current_user: CurrentUser) -> ProfileRespon
     status_code=status.HTTP_200_OK,
 )
 async def update_profile(
-    data: ProfileUpdateRequest, db: DbSession, current_user: CurrentUser
+    db: DbSession, current_user: CurrentUser, data: ProfileUpdateRequest
 ) -> ProfileResponse:
     """Partially update the current user's profile.
 

@@ -17,3 +17,10 @@ async def entity_already_exists_handler(
         status_code=status.HTTP_409_CONFLICT,
         content={"detail": f"{exc}."},
     )
+
+
+async def entity_in_use_handler(request: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"detail": f"{exc}."},
+    )

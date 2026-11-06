@@ -16,3 +16,10 @@ class EntityAlreadyExistsError(MoviesError):
     def __init__(self, entity: str):
         self.entity = entity
         super().__init__(f"{entity} already exists")
+
+
+class EntityInUseError(MoviesError):
+
+    def __init__(self, entity: str):
+        self.entity = entity
+        super().__init__(f"{entity} is in use")

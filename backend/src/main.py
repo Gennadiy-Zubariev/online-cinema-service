@@ -35,13 +35,18 @@ from src.accounts.exceptions import (
     AvatarTooLargeError,
 )
 from src.accounts.router import router as accounts_router
-from src.movies.router import router as movies_router
 from src.config.settings import get_settings
 from src.movies.exception_handlers import (
     entity_not_found_handler,
     entity_already_exists_handler,
+    entity_in_use_handler,
 )
-from src.movies.exceptions import EntityNotFoundError, EntityAlreadyExistsError
+from src.movies.exceptions import (
+    EntityNotFoundError,
+    EntityAlreadyExistsError,
+    EntityInUseError,
+)
+from src.movies.router import router as movies_router
 from src.storage.client import ensure_bucket_exists
 
 settings = get_settings()
@@ -75,6 +80,7 @@ app.add_exception_handler(UnsupportedAvatarTypeError, unsupported_avatar_type_ha
 app.add_exception_handler(AvatarTooLargeError, avatar_too_large_handler)
 app.add_exception_handler(EntityNotFoundError, entity_not_found_handler)
 app.add_exception_handler(EntityAlreadyExistsError, entity_already_exists_handler)
+app.add_exception_handler(EntityInUseError, entity_in_use_handler)
 
 
 @app.get("/health")

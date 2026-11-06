@@ -1,11 +1,15 @@
 from typing import TypeVar
 
-from psycopg.errors import UniqueViolation
+from psycopg.errors import UniqueViolation, ForeignKeyViolation
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.movies.exceptions import EntityAlreadyExistsError, EntityNotFoundError
+from src.movies.exceptions import (
+    EntityAlreadyExistsError,
+    EntityNotFoundError,
+    EntityInUseError,
+)
 from src.movies.models import Genre, Star, Director, Certification
 
 NamedModel = TypeVar("NamedModel", Genre, Star, Director, Certification)
@@ -63,4 +67,10 @@ async def delete_named(
 ) -> None:
     entity = await get_named(db=db, model=model, entity_id=entity_id)
     await db.delete(entity)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as error:
+        await db.rollback()
+        if isinstance(error.orig, ForeignKeyViolation):
+            raise EntityInUseError(model.__name__) from error
+        raise

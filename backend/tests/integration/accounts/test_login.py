@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.accounts.models import RefreshToken
 from src.accounts.security import JWT_ALGORITHM, hash_token
 from src.config.settings import get_settings
-from tests.integration.accounts.conftest import USER_PASSWORD, CreateUser
+from tests.integration.conftest import USER_PASSWORD, CreateUser
 
 LOGIN_URL = "/api/v1/accounts/login"
 INVALID_CREDENTIALS = {"detail": "Invalid email or password."}
