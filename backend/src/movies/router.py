@@ -451,6 +451,8 @@ async def get_movie_list(
     Movies with equal sort values are ordered by id, so pages are stable.
     Paginated: `page` starts at 1, `page_size` is 1-100 (default 20);
     `total` counts all movies matching the filters.
+    Search: search matches name, description,
+    star or director (case-insensitive substring).
     A page past the end returns an empty `items` list.
     """
     movies, total = await list_movies(

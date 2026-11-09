@@ -2,7 +2,7 @@ from typing import TypeVar
 from uuid import uuid4
 
 from psycopg.errors import UniqueViolation, ForeignKeyViolation
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
@@ -157,6 +157,17 @@ async def list_movies(
         stmt = stmt.where(Movie.imdb >= params.imdb_min)
     if params.imdb_max is not None:
         stmt = stmt.where(Movie.imdb <= params.imdb_max)
+    if params.search:
+        stmt = stmt.where(
+            or_(
+                Movie.name.icontains(params.search, autoescape=True),
+                Movie.description.icontains(params.search, autoescape=True),
+                Movie.stars.any(Star.name.icontains(params.search, autoescape=True)),
+                Movie.directors.any(
+                    Director.name.icontains(params.search, autoescape=True)
+                ),
+            )
+        )
     column = SORT_COLUMNS[params.sort_by]
     sort = column.desc() if params.order == "desc" else column.asc()
     total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
