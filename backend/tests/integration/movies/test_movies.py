@@ -713,6 +713,7 @@ async def test_delete(
     create_user: CreateUser,
     db_session: AsyncSession,
     movie: Movie,
+    storage_mock: dict[str, MagicMock],
 ) -> None:
     caller = await create_caller(create_user)
 
@@ -721,6 +722,26 @@ async def test_delete(
     assert response.status_code == 204
     assert response.content == b""
     assert await count_rows(db_session, Movie) == 0
+    # No poster -> nothing to delete in S3.
+    storage_mock["delete_file"].assert_not_called()
+
+
+async def test_delete_removes_poster_file(
+    client: AsyncClient,
+    create_user: CreateUser,
+    db_session: AsyncSession,
+    movie: Movie,
+    storage_mock: dict[str, MagicMock],
+) -> None:
+    movie.poster = "posters/1/poster.jpg"
+    await db_session.commit()
+    caller = await create_caller(create_user)
+
+    response = await client.delete(movie_url(movie.id), headers=auth_header(caller))
+
+    assert response.status_code == 204
+    assert await count_rows(db_session, Movie) == 0
+    storage_mock["delete_file"].assert_called_once_with("posters/1/poster.jpg")
 
 
 async def test_delete_unlinks_but_keeps_catalog_entities(
@@ -743,7 +764,9 @@ async def test_delete_unlinks_but_keeps_catalog_entities(
 
 
 async def test_delete_unknown_movie_returns_404(
-    client: AsyncClient, create_user: CreateUser
+    client: AsyncClient,
+    create_user: CreateUser,
+    storage_mock: dict[str, MagicMock],
 ) -> None:
     caller = await create_caller(create_user)
 
@@ -751,6 +774,7 @@ async def test_delete_unknown_movie_returns_404(
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Movie not found."}
+    storage_mock["delete_file"].assert_not_called()
 
 
 # --- poster ---
