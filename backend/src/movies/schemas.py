@@ -2,7 +2,7 @@ from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, StringConstraints, ConfigDict, Field
+from pydantic import BaseModel, StringConstraints, ConfigDict, Field, field_validator
 
 EntityName = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)
@@ -10,6 +10,13 @@ EntityName = Annotated[
 MovieDescription = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1)
 ]
+MovieYear = Annotated[int, Field(ge=1888)]
+MovieTime = Annotated[int, Field(gt=0)]
+ImdbRating = Annotated[float, Field(ge=0, le=10)]
+Votes = Annotated[int, Field(ge=0)]
+MetaScore = Annotated[float, Field(ge=0, le=100)]
+Gross = Annotated[float, Field(ge=0)]
+Price = Annotated[Decimal, Field(ge=0, max_digits=10, decimal_places=2)]
 
 
 class NamedEntityRequest(BaseModel):
@@ -32,18 +39,53 @@ class NamedEntityListResponse(BaseModel):
 
 class MovieCreateRequest(BaseModel):
     name: EntityName
-    year: int = Field(ge=1888)
-    time: int = Field(gt=0)
-    imdb: float = Field(ge=0, le=10)
-    votes: int = Field(ge=0)
-    meta_score: float | None = Field(default=None, ge=0, le=100)
-    gross: float | None = Field(default=None, ge=0)
+    year: MovieYear
+    time: MovieTime
+    imdb: ImdbRating
+    votes: Votes
+    meta_score: MetaScore | None = None
+    gross: Gross | None = None
     description: MovieDescription
-    price: Decimal = Field(ge=0, max_digits=10, decimal_places=2)
+    price: Price
     certification_id: int
     genre_ids: set[int] = set()
     director_ids: set[int] = set()
     star_ids: set[int] = set()
+
+
+class MovieUpdateRequest(BaseModel):
+    name: EntityName | None = None
+    year: MovieYear | None = None
+    time: MovieTime | None = None
+    imdb: ImdbRating | None = None
+    votes: Votes | None = None
+    meta_score: MetaScore | None = None
+    gross: Gross | None = None
+    description: MovieDescription | None = None
+    price: Price | None = None
+    certification_id: int | None = None
+    genre_ids: set[int] | None = None
+    director_ids: set[int] | None = None
+    star_ids: set[int] | None = None
+
+    @field_validator(
+        "name",
+        "year",
+        "time",
+        "imdb",
+        "votes",
+        "description",
+        "price",
+        "certification_id",
+        "genre_ids",
+        "director_ids",
+        "star_ids",
+    )
+    @classmethod
+    def reject_null(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("Field cannot be null")
+        return value
 
 
 class MovieResponse(BaseModel):

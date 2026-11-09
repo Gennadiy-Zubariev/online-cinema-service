@@ -4,6 +4,7 @@ from psycopg.errors import UniqueViolation, ForeignKeyViolation
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload, selectinload
 
 from src.database.base import Base
 from src.movies.exceptions import (
@@ -12,9 +13,10 @@ from src.movies.exceptions import (
     EntityInUseError,
 )
 from src.movies.models import Genre, Star, Director, Certification, Movie
-from src.movies.schemas import MovieCreateRequest
+from src.movies.schemas import MovieCreateRequest, MovieUpdateRequest
 
 NamedModel = TypeVar("NamedModel", Genre, Star, Director, Certification)
+RELATION_ID_FIELDS = {"certification_id", "genre_ids", "director_ids", "star_ids"}
 
 
 async def _commit_unique(db: AsyncSession, model: type[Base]) -> None:
@@ -101,9 +103,7 @@ async def create_movie(
     directors = await _get_named_by_ids(db=db, model=Director, ids=data.director_ids)
     stars = await _get_named_by_ids(db=db, model=Star, ids=data.star_ids)
     movie = Movie(
-        **data.model_dump(
-            exclude={"certification_id", "genre_ids", "director_ids", "star_ids"}
-        ),
+        **data.model_dump(exclude=RELATION_ID_FIELDS),
         certification=certification,
         genres=genres,
         directors=directors,
@@ -112,3 +112,54 @@ async def create_movie(
     db.add(movie)
     await _commit_unique(db=db, model=Movie)
     return movie
+
+
+async def get_movie(db: AsyncSession, movie_id: int) -> Movie:
+    movie = await db.scalar(
+        select(Movie)
+        .where(Movie.id == movie_id)
+        .options(
+            joinedload(Movie.certification),
+            selectinload(Movie.genres),
+            selectinload(Movie.stars),
+            selectinload(Movie.directors),
+        )
+    )
+    if movie is None:
+        raise EntityNotFoundError(Movie.__name__)
+    return movie
+
+
+async def update_movie(
+    db: AsyncSession, movie_id: int, data: MovieUpdateRequest
+) -> Movie:
+    movie = await get_movie(db=db, movie_id=movie_id)
+
+    if data.certification_id is not None:
+        movie.certification = await get_named(
+            db=db, model=Certification, entity_id=data.certification_id
+        )
+    if data.genre_ids is not None:
+        movie.genres = await _get_named_by_ids(db=db, model=Genre, ids=data.genre_ids)
+    if data.director_ids is not None:
+        movie.directors = await _get_named_by_ids(
+            db=db, model=Director, ids=data.director_ids
+        )
+    if data.star_ids is not None:
+        movie.stars = await _get_named_by_ids(db=db, model=Star, ids=data.star_ids)
+
+    for field, value in data.model_dump(
+        exclude_unset=True, exclude=RELATION_ID_FIELDS
+    ).items():
+        setattr(movie, field, value)
+
+    await _commit_unique(db=db, model=Movie)
+    return movie
+
+
+async def delete_movie(db: AsyncSession, movie_id: int) -> None:
+    movie = await db.get(Movie, movie_id)
+    if movie is None:
+        raise EntityNotFoundError(Movie.__name__)
+    await db.delete(movie)
+    await db.commit()

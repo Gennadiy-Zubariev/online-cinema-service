@@ -10,6 +10,7 @@ from src.movies.schemas import (
     NamedEntityListResponse,
     MovieCreateRequest,
     MovieResponse,
+    MovieUpdateRequest,
 )
 from src.movies.service import (
     create_named,
@@ -18,6 +19,8 @@ from src.movies.service import (
     update_named,
     delete_named,
     create_movie,
+    update_movie,
+    delete_movie,
 )
 
 router = APIRouter(tags=["movies"])
@@ -358,3 +361,36 @@ async def add_movie(db: DbSession, data: MovieCreateRequest) -> Movie:
     Returns 409 if a movie with the same name, year and duration already exists.
     """
     return await create_movie(db=db, data=data)
+
+
+@router.patch(
+    "/movies/{movie_id}",
+    response_model=MovieResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(get_current_moderator)],
+)
+async def edit_movie(db: DbSession, movie_id: int, data: MovieUpdateRequest) -> Movie:
+    """Partially update a movie (moderator only).
+
+    Only the fields sent are changed; `meta_score` and `gross` can be cleared
+    with null, other fields cannot be null. A list of ids (`genre_ids`, ...)
+    replaces the current set; send [] to remove all.
+    Returns 404 if the movie or any referenced entity does not exist.
+    Returns 409 if another movie has the same name, year and duration.
+    """
+    return await update_movie(db=db, movie_id=movie_id, data=data)
+
+
+@router.delete(
+    "/movies/{movie_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(get_current_moderator)],
+)
+async def remove_movie(db: DbSession, movie_id: int) -> None:
+    """Delete a movie (moderator only).
+
+    Its links to genres, directors and stars are removed as well;
+    the catalog entities themselves are kept.
+    Returns 404 if the movie does not exist.
+    """
+    await delete_movie(db=db, movie_id=movie_id)

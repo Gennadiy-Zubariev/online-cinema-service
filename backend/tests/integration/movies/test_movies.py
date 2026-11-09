@@ -1,9 +1,10 @@
-"""Movie CRUD (moderator): create.
+"""Movie CRUD (moderator): create, update, delete.
 
 Catalog entities are referenced by id; the response nests them as {id, name}.
 """
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -21,7 +22,9 @@ from src.movies.models import (
     Genre,
     Movie,
     Star,
+    movie_directors,
     movie_genres,
+    movie_stars,
 )
 from tests.integration.conftest import CreateUser
 
@@ -351,3 +354,377 @@ async def test_create_invalid_body_returns_422(
     )
 
     assert response.status_code == 422
+
+
+# --- update ---
+
+
+@pytest.fixture
+async def movie(db_session: AsyncSession, catalog: Catalog) -> Movie:
+    """Saved movie linked to the first genre, the director and the star."""
+    result = Movie(
+        name="Inception",
+        year=2010,
+        time=148,
+        imdb=8.8,
+        votes=2500000,
+        meta_score=74,
+        gross=292000000,
+        description="A thief who steals corporate secrets through dreams.",
+        price=Decimal("7.99"),
+        certification=catalog.certification,
+        genres=[catalog.genres[0]],
+        directors=[catalog.director],
+        stars=[catalog.star],
+    )
+    db_session.add(result)
+    await db_session.commit()
+    return result
+
+
+def movie_url(movie_id: int) -> str:
+    return f"{MOVIES_URL}/{movie_id}"
+
+
+async def stored_genre_ids(db_session: AsyncSession, movie_id: int) -> set[int]:
+    result = await db_session.scalars(
+        select(movie_genres.c.genre_id).where(movie_genres.c.movie_id == movie_id)
+    )
+    return set(result.all())
+
+
+async def test_update_requires_token(client: AsyncClient, movie: Movie) -> None:
+    response = await client.patch(movie_url(movie.id), json={"name": "Tenet"})
+
+    assert response.status_code == 401
+
+
+async def test_update_rejects_regular_user(
+    client: AsyncClient, create_user: CreateUser, movie: Movie
+) -> None:
+    caller = await create_caller(create_user, group=UserGroupEnum.USER)
+
+    response = await client.patch(
+        movie_url(movie.id), json={"name": "Tenet"}, headers=auth_header(caller)
+    )
+
+    assert response.status_code == 403
+    assert response.json() == PERMISSION_DENIED
+
+
+async def test_update_changes_only_sent_fields(
+    client: AsyncClient,
+    create_user: CreateUser,
+    db_session: AsyncSession,
+    catalog: Catalog,
+    movie: Movie,
+) -> None:
+    caller = await create_caller(create_user)
+
+    response = await client.patch(
+        movie_url(movie.id),
+        json={"name": "  Inception 2  ", "price": "12.50"},
+        headers=auth_header(caller),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["name"] == "Inception 2"
+    assert body["price"] == "12.50"
+    assert body["year"] == 2010
+    assert body["meta_score"] == 74
+    assert body["certification"] == {"id": catalog.certification.id, "name": "PG-13"}
+    assert body["genres"] == [{"id": catalog.genres[0].id, "name": "Drama"}]
+    assert body["directors"] == [
+        {"id": catalog.director.id, "name": "Christopher Nolan"}
+    ]
+    assert body["stars"] == [{"id": catalog.star.id, "name": "Cillian Murphy"}]
+
+    await db_session.refresh(movie)
+    assert movie.name == "Inception 2"
+    assert movie.price == Decimal("12.50")
+
+
+async def test_update_with_empty_body_changes_nothing(
+    client: AsyncClient, create_user: CreateUser, movie: Movie
+) -> None:
+    caller = await create_caller(create_user)
+
+    response = await client.patch(
+        movie_url(movie.id), json={}, headers=auth_header(caller)
+    )
+
+    assert response.status_code == 200
+    assert response.json()["name"] == "Inception"
+    assert response.json()["price"] == "7.99"
+
+
+async def test_update_clears_nullable_fields(
+    client: AsyncClient,
+    create_user: CreateUser,
+    db_session: AsyncSession,
+    movie: Movie,
+) -> None:
+    caller = await create_caller(create_user)
+
+    response = await client.patch(
+        movie_url(movie.id),
+        json={"meta_score": None, "gross": None},
+        headers=auth_header(caller),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["meta_score"] is None
+    assert response.json()["gross"] is None
+    await db_session.refresh(movie)
+    assert movie.meta_score is None
+    assert movie.gross is None
+
+
+async def test_update_replaces_genres(
+    client: AsyncClient,
+    create_user: CreateUser,
+    db_session: AsyncSession,
+    catalog: Catalog,
+    movie: Movie,
+) -> None:
+    caller = await create_caller(create_user)
+    comedy = catalog.genres[1]
+
+    response = await client.patch(
+        movie_url(movie.id),
+        json={"genre_ids": [comedy.id]},
+        headers=auth_header(caller),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["genres"] == [{"id": comedy.id, "name": "Comedy"}]
+    assert await stored_genre_ids(db_session, movie.id) == {comedy.id}
+
+
+async def test_update_with_empty_lists_unlinks_all(
+    client: AsyncClient,
+    create_user: CreateUser,
+    db_session: AsyncSession,
+    movie: Movie,
+) -> None:
+    caller = await create_caller(create_user)
+
+    response = await client.patch(
+        movie_url(movie.id),
+        json={"genre_ids": [], "director_ids": [], "star_ids": []},
+        headers=auth_header(caller),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["genres"] == []
+    assert body["directors"] == []
+    assert body["stars"] == []
+    assert await stored_genre_ids(db_session, movie.id) == set()
+
+
+async def test_update_changes_certification(
+    client: AsyncClient,
+    create_user: CreateUser,
+    db_session: AsyncSession,
+    movie: Movie,
+) -> None:
+    other = Certification(name="R")
+    db_session.add(other)
+    await db_session.commit()
+    caller = await create_caller(create_user)
+
+    response = await client.patch(
+        movie_url(movie.id),
+        json={"certification_id": other.id},
+        headers=auth_header(caller),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["certification"] == {"id": other.id, "name": "R"}
+    await db_session.refresh(movie)
+    assert movie.certification_id == other.id
+
+
+async def test_update_unknown_movie_returns_404(
+    client: AsyncClient, create_user: CreateUser
+) -> None:
+    caller = await create_caller(create_user)
+
+    response = await client.patch(
+        movie_url(UNKNOWN_ID), json={"name": "Tenet"}, headers=auth_header(caller)
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Movie not found."}
+
+
+@pytest.mark.parametrize(
+    ("body", "entity"),
+    [
+        ({"certification_id": UNKNOWN_ID}, "Certification"),
+        ({"genre_ids": [UNKNOWN_ID]}, "Genre"),
+        ({"director_ids": [UNKNOWN_ID]}, "Director"),
+        ({"star_ids": [UNKNOWN_ID]}, "Star"),
+    ],
+    ids=["certification", "genre", "director", "star"],
+)
+async def test_update_with_unknown_entity_returns_404(
+    client: AsyncClient,
+    create_user: CreateUser,
+    movie: Movie,
+    body: dict[str, Any],
+    entity: str,
+) -> None:
+    caller = await create_caller(create_user)
+
+    response = await client.patch(
+        movie_url(movie.id), json=body, headers=auth_header(caller)
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": f"{entity} not found."}
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [{}, {"genre_ids": []}],
+    ids=["name_only", "name_and_genres"],
+)
+async def test_update_to_existing_movie_returns_409(
+    client: AsyncClient,
+    create_user: CreateUser,
+    db_session: AsyncSession,
+    catalog: Catalog,
+    movie: Movie,
+    extra: dict[str, Any],
+) -> None:
+    """`name_and_genres`: the genre lookup must not autoflush the new name (-> 500)."""
+    other = Movie(
+        name="Tenet",
+        year=movie.year,
+        time=movie.time,
+        imdb=7.3,
+        votes=600000,
+        description="Time inversion.",
+        price=Decimal("8.99"),
+        certification=catalog.certification,
+    )
+    db_session.add(other)
+    await db_session.commit()
+    caller = await create_caller(create_user)
+
+    response = await client.patch(
+        movie_url(movie.id),
+        json={"name": "Tenet", **extra},
+        headers=auth_header(caller),
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Movie already exists."}
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"name": None},
+        {"price": None},
+        {"certification_id": None},
+        {"genre_ids": None},
+        {"name": ""},
+        {"imdb": 10.1},
+        {"price": "9.999"},
+    ],
+    ids=[
+        "null_name",
+        "null_price",
+        "null_certification",
+        "null_genre_ids",
+        "empty_name",
+        "imdb_above_10",
+        "price_three_decimals",
+    ],
+)
+async def test_update_invalid_body_returns_422(
+    client: AsyncClient,
+    create_user: CreateUser,
+    movie: Movie,
+    body: dict[str, Any],
+) -> None:
+    caller = await create_caller(create_user)
+
+    response = await client.patch(
+        movie_url(movie.id), json=body, headers=auth_header(caller)
+    )
+
+    assert response.status_code == 422
+
+
+# --- delete ---
+
+
+async def count_rows(db_session: AsyncSession, table: Any) -> int:
+    return await db_session.scalar(select(func.count()).select_from(table)) or 0
+
+
+async def test_delete_requires_token(client: AsyncClient, movie: Movie) -> None:
+    response = await client.delete(movie_url(movie.id))
+
+    assert response.status_code == 401
+
+
+async def test_delete_rejects_regular_user(
+    client: AsyncClient, create_user: CreateUser, movie: Movie
+) -> None:
+    caller = await create_caller(create_user, group=UserGroupEnum.USER)
+
+    response = await client.delete(movie_url(movie.id), headers=auth_header(caller))
+
+    assert response.status_code == 403
+    assert response.json() == PERMISSION_DENIED
+
+
+async def test_delete(
+    client: AsyncClient,
+    create_user: CreateUser,
+    db_session: AsyncSession,
+    movie: Movie,
+) -> None:
+    caller = await create_caller(create_user)
+
+    response = await client.delete(movie_url(movie.id), headers=auth_header(caller))
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert await count_rows(db_session, Movie) == 0
+
+
+async def test_delete_unlinks_but_keeps_catalog_entities(
+    client: AsyncClient,
+    create_user: CreateUser,
+    db_session: AsyncSession,
+    movie: Movie,
+) -> None:
+    caller = await create_caller(create_user)
+
+    await client.delete(movie_url(movie.id), headers=auth_header(caller))
+
+    assert await count_rows(db_session, movie_genres) == 0
+    assert await count_rows(db_session, movie_directors) == 0
+    assert await count_rows(db_session, movie_stars) == 0
+    assert await count_rows(db_session, Certification) == 1
+    assert await count_rows(db_session, Genre) == 2
+    assert await count_rows(db_session, Director) == 1
+    assert await count_rows(db_session, Star) == 1
+
+
+async def test_delete_unknown_movie_returns_404(
+    client: AsyncClient, create_user: CreateUser
+) -> None:
+    caller = await create_caller(create_user)
+
+    response = await client.delete(movie_url(UNKNOWN_ID), headers=auth_header(caller))
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Movie not found."}
