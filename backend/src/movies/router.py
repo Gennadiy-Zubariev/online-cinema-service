@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, status, UploadFile, Query
 
-from src.accounts.dependencies import get_current_moderator
+from src.accounts.dependencies import get_current_moderator, CurrentUser
 from src.common.pagination import Pagination
 from src.database.session import DbSession
 from src.movies.models import Certification, Director, Genre, Star, Movie
@@ -16,6 +16,7 @@ from src.movies.schemas import (
     MovieListResponse,
     MovieListItemResponse,
     MovieCatalogQuery,
+    MovieReactionRequest,
 )
 from src.movies.service import (
     create_named,
@@ -30,6 +31,8 @@ from src.movies.service import (
     MAX_POSTER_SIZE,
     get_movie,
     list_movies,
+    set_movie_reaction,
+    delete_movie_reaction,
 )
 from src.storage.client import get_file_url
 
@@ -522,3 +525,34 @@ async def remove_movie(db: DbSession, movie_id: int) -> None:
     Returns 404 if the movie does not exist.
     """
     await delete_movie(db=db, movie_id=movie_id)
+
+
+@router.put(
+    "/movies/{movie_id}/reaction",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def put_movie_reaction(
+    db: DbSession, current_user: CurrentUser, movie_id: int, data: MovieReactionRequest
+) -> None:
+    """Like (`is_like: true`) or dislike (`false`) a movie.
+
+    A user has at most one reaction per movie: a new one replaces the old.
+    Returns 404 if the movie does not exist.
+    """
+    await set_movie_reaction(
+        db=db, user_id=current_user.id, movie_id=movie_id, is_like=data.is_like
+    )
+
+
+@router.delete(
+    "/movies/{movie_id}/reaction",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_movie_reaction(
+    db: DbSession, current_user: CurrentUser, movie_id: int
+) -> None:
+    """Remove the current user's like or dislike from a movie.
+
+    Idempotent: returns 204 even if there was no reaction.
+    """
+    await delete_movie_reaction(db=db, user_id=current_user.id, movie_id=movie_id)

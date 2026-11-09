@@ -2,7 +2,7 @@ from typing import TypeVar
 from uuid import uuid4
 
 from psycopg.errors import UniqueViolation, ForeignKeyViolation
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, insert, delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
@@ -14,7 +14,7 @@ from src.movies.exceptions import (
     EntityNotFoundError,
     EntityInUseError,
 )
-from src.movies.models import Genre, Star, Director, Certification, Movie
+from src.movies.models import Genre, Star, Director, Certification, Movie, MovieReaction
 from src.movies.schemas import (
     MovieCreateRequest,
     MovieUpdateRequest,
@@ -233,3 +233,29 @@ async def update_movie_poster(
     if old_key is not None:
         await run_in_threadpool(delete_file, old_key)
     return movie
+
+
+async def set_movie_reaction(
+    db: AsyncSession, user_id: int, movie_id: int, is_like: bool
+) -> None:
+    if await db.get(Movie, movie_id) is None:
+        raise EntityNotFoundError(Movie.__name__)
+
+    stmt = insert(MovieReaction).values(
+        user_id=user_id, movie_id=movie_id, is_like=is_like
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["user_id", "movie_id"],
+        set_={"is_like": is_like},
+    )
+    await db.execute(stmt)
+    await db.commit()
+
+
+async def delete_movie_reaction(db: AsyncSession, user_id: int, movie_id: int) -> None:
+    await db.execute(
+        delete(MovieReaction).where(
+            MovieReaction.user_id == user_id, MovieReaction.movie_id == movie_id
+        )
+    )
+    await db.commit()

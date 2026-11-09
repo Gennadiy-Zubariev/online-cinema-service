@@ -138,3 +138,7 @@ class MovieCatalogQuery(BaseModel):
     sort_by: Literal["id", "price", "year", "votes"] = "id"
     order: Literal["asc", "desc"] = "asc"
     search: SearchText | None = None
+
+
+class MovieReactionRequest(BaseModel):
+    is_like: bool
