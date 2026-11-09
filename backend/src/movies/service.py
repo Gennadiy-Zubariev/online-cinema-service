@@ -2,7 +2,8 @@ from typing import TypeVar
 from uuid import uuid4
 
 from psycopg.errors import UniqueViolation, ForeignKeyViolation
-from sqlalchemy import select, func, or_, insert, delete
+from sqlalchemy import select, func, or_, delete
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
