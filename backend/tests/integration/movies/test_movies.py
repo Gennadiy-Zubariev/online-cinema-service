@@ -1,5 +1,5 @@
 """Movie CRUD (moderator): create, update, delete, poster upload;
-catalog (public): movie detail, movie list.
+catalog (public): movie detail, movie list with filters.
 
 Catalog entities are referenced by id; the response nests them as {id, name}.
 """
@@ -1185,6 +1185,103 @@ async def test_list_loads_genres_in_fresh_session(
 )
 async def test_list_invalid_pagination_returns_422(
     client: AsyncClient, params: dict[str, int]
+) -> None:
+    response = await client.get(MOVIES_URL, params=params)
+
+    assert response.status_code == 422
+
+
+# --- list: filters ---
+
+
+@pytest.fixture
+async def filter_movies(db_session: AsyncSession, catalog: Catalog) -> None:
+    """Old (2000, 6.0), Middle (2005, 7.5), New (2010, 8.5)."""
+    db_session.add_all(
+        [
+            Movie(
+                name=name,
+                year=year,
+                time=100,
+                imdb=imdb,
+                votes=1000,
+                description="Description.",
+                price=Decimal("5.00"),
+                certification=catalog.certification,
+            )
+            for name, year, imdb in [
+                ("Old", 2000, 6.0),
+                ("Middle", 2005, 7.5),
+                ("New", 2010, 8.5),
+            ]
+        ]
+    )
+    await db_session.commit()
+
+
+def names(response_json: dict[str, Any]) -> list[str]:
+    return [item["name"] for item in response_json["items"]]
+
+
+@pytest.mark.parametrize(
+    ("params", "expected"),
+    [
+        ({}, ["Old", "Middle", "New"]),
+        ({"year_from": 2005}, ["Middle", "New"]),
+        ({"year_to": 2005}, ["Old", "Middle"]),
+        ({"year_from": 2005, "year_to": 2005}, ["Middle"]),
+        ({"imdb_min": 7.5}, ["Middle", "New"]),
+        ({"imdb_max": 7.5}, ["Old", "Middle"]),
+        ({"imdb_min": 7, "imdb_max": 8}, ["Middle"]),
+        ({"year_from": 2001, "imdb_min": 8}, ["New"]),
+        ({"year_from": 2010, "year_to": 2000}, []),
+    ],
+    ids=[
+        "no_filters",
+        "year_from_inclusive",
+        "year_to_inclusive",
+        "exact_year",
+        "imdb_min_inclusive",
+        "imdb_max_inclusive",
+        "imdb_range",
+        "year_and_imdb",
+        "inverted_range_is_empty",
+    ],
+)
+async def test_list_filters(
+    client: AsyncClient,
+    filter_movies: None,
+    params: dict[str, float],
+    expected: list[str],
+) -> None:
+    response = await client.get(MOVIES_URL, params=params)
+
+    assert response.status_code == 200
+    assert names(response.json()) == expected
+    assert response.json()["total"] == len(expected)
+
+
+async def test_list_total_counts_filtered_movies_not_page(
+    client: AsyncClient, filter_movies: None
+) -> None:
+    response = await client.get(MOVIES_URL, params={"year_from": 2005, "page_size": 1})
+
+    assert names(response.json()) == ["Middle"]
+    assert response.json()["total"] == 2
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"year_from": 1887},
+        {"year_to": "abc"},
+        {"imdb_min": 10.1},
+        {"imdb_max": -0.1},
+    ],
+    ids=["year_too_early", "year_not_int", "imdb_above_10", "imdb_negative"],
+)
+async def test_list_invalid_filter_returns_422(
+    client: AsyncClient, params: dict[str, Any]
 ) -> None:
     response = await client.get(MOVIES_URL, params=params)
 
