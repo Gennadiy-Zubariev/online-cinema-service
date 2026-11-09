@@ -1,5 +1,5 @@
 """Movie CRUD (moderator): create, update, delete, poster upload;
-catalog (public): movie detail, movie list with filters and sorting.
+catalog (public): movie detail, movie list with filters, sorting and search.
 
 Catalog entities are referenced by id; the response nests them as {id, name}.
 """
@@ -1390,5 +1390,125 @@ async def test_list_invalid_sorting_returns_422(
     client: AsyncClient, params: dict[str, str]
 ) -> None:
     response = await client.get(MOVIES_URL, params=params)
+
+    assert response.status_code == 422
+
+
+# --- list: search ---
+
+
+@pytest.fixture
+async def search_movies(db_session: AsyncSession, catalog: Catalog) -> None:
+    """Movies whose name, description, stars and directors differ."""
+
+    def movie_with(
+        name: str,
+        description: str,
+        stars: tuple[str, ...] = (),
+        directors: tuple[str, ...] = (),
+        year: int = 2000,
+    ) -> Movie:
+        return Movie(
+            name=name,
+            year=year,
+            time=100,
+            imdb=7.0,
+            votes=1000,
+            description=description,
+            price=Decimal("5.00"),
+            certification=catalog.certification,
+            stars=[Star(name=star) for star in stars],
+            directors=[Director(name=director) for director in directors],
+        )
+
+    db_session.add_all(
+        [
+            movie_with(
+                "The Dark Knight",
+                "Batman fights crime in Gotham.",
+                stars=("Christian Bale", "Heath Ledger"),
+                directors=("Christopher Nolan Jr",),
+                year=2008,
+            ),
+            movie_with(
+                "Amelie",
+                "A shy waitress in Paris.",
+                stars=("Audrey Tautou",),
+                directors=("Jean-Pierre Jeunet",),
+                year=2001,
+            ),
+            movie_with("100% Love", "Romance."),
+            movie_with("AXB Story", "Plain text."),
+        ]
+    )
+    await db_session.commit()
+
+
+@pytest.mark.parametrize(
+    ("search", "expected"),
+    [
+        ("dark", ["The Dark Knight"]),
+        ("GOTHAM", ["The Dark Knight"]),
+        ("tautou", ["Amelie"]),
+        ("jeunet", ["Amelie"]),
+        ("  amelie  ", ["Amelie"]),
+        ("100%", ["100% Love"]),
+        ("a_b", []),
+        ("nothing like this", []),
+    ],
+    ids=[
+        "name",
+        "description_case_insensitive",
+        "star",
+        "director",
+        "strips_whitespace",
+        "percent_is_literal",
+        "underscore_is_literal",
+        "no_match",
+    ],
+)
+async def test_list_search(
+    client: AsyncClient, search_movies: None, search: str, expected: list[str]
+) -> None:
+    response = await client.get(MOVIES_URL, params={"search": search})
+
+    assert response.status_code == 200
+    assert names(response.json()) == expected
+    assert response.json()["total"] == len(expected)
+
+
+async def test_list_search_returns_movie_once_for_several_matches(
+    client: AsyncClient, search_movies: None
+) -> None:
+    """ "chris" matches two stars' and the director's names of one movie."""
+    response = await client.get(MOVIES_URL, params={"search": "chris"})
+
+    assert names(response.json()) == ["The Dark Knight"]
+    assert response.json()["total"] == 1
+
+
+@pytest.mark.parametrize("search", ["", "   "], ids=["empty", "whitespace"])
+async def test_list_empty_search_is_ignored(
+    client: AsyncClient, search_movies: None, search: str
+) -> None:
+    response = await client.get(MOVIES_URL, params={"search": search})
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 4
+
+
+async def test_list_search_with_filter_and_sorting(
+    client: AsyncClient, search_movies: None
+) -> None:
+    response = await client.get(
+        MOVIES_URL,
+        params={"search": "a", "year_from": 2001, "sort_by": "year", "order": "desc"},
+    )
+
+    assert names(response.json()) == ["The Dark Knight", "Amelie"]
+
+
+async def test_list_search_too_long_returns_422(client: AsyncClient) -> None:
+    response = await client.get(MOVIES_URL, params={"search": "a" * 256})
 
     assert response.status_code == 422
