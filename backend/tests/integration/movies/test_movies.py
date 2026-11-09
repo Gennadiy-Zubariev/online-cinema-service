@@ -1,5 +1,5 @@
 """Movie CRUD (moderator): create, update, delete, poster upload;
-catalog (public): movie detail, movie list with filters.
+catalog (public): movie detail, movie list with filters and sorting.
 
 Catalog entities are referenced by id; the response nests them as {id, name}.
 """
@@ -1282,6 +1282,112 @@ async def test_list_total_counts_filtered_movies_not_page(
 )
 async def test_list_invalid_filter_returns_422(
     client: AsyncClient, params: dict[str, Any]
+) -> None:
+    response = await client.get(MOVIES_URL, params=params)
+
+    assert response.status_code == 422
+
+
+# --- list: sorting ---
+
+
+@pytest.fixture
+async def sort_movies(db_session: AsyncSession, catalog: Catalog) -> list[Movie]:
+    """A (2010, $9.99, 500 votes), B (2000, $4.99, 900), C (2005, $9.99, 100).
+
+    A and C share a price, so price sorting needs the id tie-breaker.
+    """
+    movies = [
+        Movie(
+            name=name,
+            year=year,
+            time=100,
+            imdb=7.0,
+            votes=votes,
+            description="Description.",
+            price=Decimal(price),
+            certification=catalog.certification,
+        )
+        for name, year, price, votes in [
+            ("A", 2010, "9.99", 500),
+            ("B", 2000, "4.99", 900),
+            ("C", 2005, "9.99", 100),
+        ]
+    ]
+    db_session.add_all(movies)
+    await db_session.commit()
+    return movies
+
+
+@pytest.mark.parametrize(
+    ("params", "expected"),
+    [
+        ({}, ["A", "B", "C"]),
+        ({"sort_by": "id", "order": "desc"}, ["C", "B", "A"]),
+        ({"sort_by": "price"}, ["B", "A", "C"]),
+        ({"sort_by": "price", "order": "desc"}, ["A", "C", "B"]),
+        ({"sort_by": "year"}, ["B", "C", "A"]),
+        ({"sort_by": "year", "order": "desc"}, ["A", "C", "B"]),
+        ({"sort_by": "votes"}, ["C", "A", "B"]),
+        ({"sort_by": "votes", "order": "desc"}, ["B", "A", "C"]),
+        ({"order": "desc"}, ["C", "B", "A"]),
+    ],
+    ids=[
+        "default_id_asc",
+        "id_desc",
+        "price_asc",
+        "price_desc_ties_by_id",
+        "year_asc",
+        "year_desc",
+        "votes_asc",
+        "votes_desc",
+        "order_without_sort_by",
+    ],
+)
+async def test_list_sorting(
+    client: AsyncClient,
+    sort_movies: list[Movie],
+    params: dict[str, str],
+    expected: list[str],
+) -> None:
+    response = await client.get(MOVIES_URL, params=params)
+
+    assert response.status_code == 200
+    assert names(response.json()) == expected
+
+
+async def test_list_sorting_is_stable_across_pages(
+    client: AsyncClient, sort_movies: list[Movie]
+) -> None:
+    """Equal prices (A, C) must not repeat or vanish between pages."""
+    pages = [
+        await client.get(
+            MOVIES_URL, params={"sort_by": "price", "page": page, "page_size": 1}
+        )
+        for page in (1, 2, 3)
+    ]
+
+    assert [names(page.json()) for page in pages] == [["B"], ["A"], ["C"]]
+
+
+async def test_list_sorting_with_filter(
+    client: AsyncClient, sort_movies: list[Movie]
+) -> None:
+    response = await client.get(
+        MOVIES_URL, params={"year_from": 2005, "sort_by": "year", "order": "desc"}
+    )
+
+    assert names(response.json()) == ["A", "C"]
+    assert response.json()["total"] == 2
+
+
+@pytest.mark.parametrize(
+    "params",
+    [{"sort_by": "name"}, {"sort_by": "PRICE"}, {"order": "up"}],
+    ids=["unknown_field", "wrong_case", "unknown_order"],
+)
+async def test_list_invalid_sorting_returns_422(
+    client: AsyncClient, params: dict[str, str]
 ) -> None:
     response = await client.get(MOVIES_URL, params=params)
 
