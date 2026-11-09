@@ -3,11 +3,13 @@ from fastapi import APIRouter, Depends, status
 from src.accounts.dependencies import get_current_moderator
 from src.common.pagination import Pagination
 from src.database.session import DbSession
-from src.movies.models import Certification, Director, Genre, Star
+from src.movies.models import Certification, Director, Genre, Star, Movie
 from src.movies.schemas import (
     NamedEntityRequest,
     NamedEntityResponse,
     NamedEntityListResponse,
+    MovieCreateRequest,
+    MovieResponse,
 )
 from src.movies.service import (
     create_named,
@@ -15,12 +17,10 @@ from src.movies.service import (
     get_named,
     update_named,
     delete_named,
+    create_movie,
 )
 
 router = APIRouter(tags=["movies"])
-
-
-# --- genres ---
 
 
 @router.post(
@@ -97,9 +97,6 @@ async def delete_genre(db: DbSession, genre_id: int) -> None:
     await delete_named(db=db, model=Genre, entity_id=genre_id)
 
 
-# --- stars ---
-
-
 @router.post(
     "/stars",
     response_model=NamedEntityResponse,
@@ -172,9 +169,6 @@ async def delete_star(db: DbSession, star_id: int) -> None:
     themselves are kept. Returns 404 if the star does not exist.
     """
     await delete_named(db=db, model=Star, entity_id=star_id)
-
-
-# --- directors ---
 
 
 @router.post(
@@ -257,9 +251,6 @@ async def delete_director(db: DbSession, director_id: int) -> None:
     themselves are kept. Returns 404 if the director does not exist.
     """
     await delete_named(db=db, model=Director, entity_id=director_id)
-
-
-# --- certifications ---
 
 
 @router.post(
@@ -350,3 +341,20 @@ async def delete_certification(db: DbSession, certification_id: int) -> None:
     certification first. Returns 404 if the certification does not exist.
     """
     await delete_named(db=db, model=Certification, entity_id=certification_id)
+
+
+@router.post(
+    "/movies",
+    response_model=MovieResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(get_current_moderator)],
+)
+async def add_movie(db: DbSession, data: MovieCreateRequest) -> Movie:
+    """Create a movie (moderator only).
+
+    Catalog entities are referenced by id: `certification_id` is required,
+    `genre_ids`, `director_ids` and `star_ids` are optional (duplicates are ignored).
+    Returns 404 if any referenced entity does not exist.
+    Returns 409 if a movie with the same name, year and duration already exists.
+    """
+    return await create_movie(db=db, data=data)
