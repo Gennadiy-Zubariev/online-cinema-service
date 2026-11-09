@@ -166,8 +166,11 @@ async def delete_movie(db: AsyncSession, movie_id: int) -> None:
     movie = await db.get(Movie, movie_id)
     if movie is None:
         raise EntityNotFoundError(Movie.__name__)
+    poster_key = movie.poster
     await db.delete(movie)
     await db.commit()
+    if poster_key is not None:
+        await run_in_threadpool(delete_file, poster_key)
 
 
 async def update_movie_poster(
