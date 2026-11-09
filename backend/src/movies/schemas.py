@@ -127,3 +127,10 @@ class MovieListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class MovieCatalogQuery(BaseModel):
+    year_from: MovieYear | None = None
+    year_to: MovieYear | None = None
+    imdb_min: ImdbRating | None = None
+    imdb_max: ImdbRating | None = None

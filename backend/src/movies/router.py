@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, status, UploadFile
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, status, UploadFile, Query
 
 from src.accounts.dependencies import get_current_moderator
 from src.common.pagination import Pagination
@@ -12,6 +14,8 @@ from src.movies.schemas import (
     MovieResponse,
     MovieUpdateRequest,
     MovieListResponse,
+    MovieListItemResponse,
+    MovieCatalogQuery,
 )
 from src.movies.service import (
     create_named,
@@ -435,14 +439,16 @@ def _to_movie_list_item(movie: Movie) -> MovieListItemResponse:
     response_model=MovieListResponse,
     status_code=status.HTTP_200_OK,
 )
-async def get_movie_list(db: DbSession, pagination: Pagination) -> MovieListResponse:
+async def get_movie_list(
+    db: DbSession, pagination: Pagination, params: Annotated[MovieCatalogQuery, Query()]
+) -> MovieListResponse:
     """List movies of the catalog, ordered by id (public).
 
     Paginated: `page` starts at 1, `page_size` is 1-100 (default 20).
     A page past the end returns an empty `items` list.
     """
     movies, total = await list_movies(
-        db=db, page=pagination.page, page_size=pagination.page_size
+        db=db, params=params, page=pagination.page, page_size=pagination.page_size
     )
     return MovieListResponse(
         items=[_to_movie_list_item(movie) for movie in movies],

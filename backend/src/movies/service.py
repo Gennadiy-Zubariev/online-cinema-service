@@ -15,7 +15,7 @@ from src.movies.exceptions import (
     EntityInUseError,
 )
 from src.movies.models import Genre, Star, Director, Certification, Movie
-from src.movies.schemas import MovieCreateRequest, MovieUpdateRequest
+from src.movies.schemas import MovieCreateRequest, MovieUpdateRequest, MovieCatalogQuery
 from src.storage.client import upload_file, delete_file
 from src.storage.images import validate_image
 
@@ -136,9 +136,17 @@ async def get_movie(db: AsyncSession, movie_id: int) -> Movie:
 
 
 async def list_movies(
-    db: AsyncSession, page: int, page_size: int
+    db: AsyncSession, params: MovieCatalogQuery, page: int, page_size: int
 ) -> tuple[list[Movie], int]:
     stmt = select(Movie)
+    if params.year_from is not None:
+        stmt = stmt.where(Movie.year >= params.year_from)
+    if params.year_to is not None:
+        stmt = stmt.where(Movie.year <= params.year_to)
+    if params.imdb_min is not None:
+        stmt = stmt.where(Movie.imdb >= params.imdb_min)
+    if params.imdb_max is not None:
+        stmt = stmt.where(Movie.imdb <= params.imdb_max)
 
     total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
     result = await db.scalars(
