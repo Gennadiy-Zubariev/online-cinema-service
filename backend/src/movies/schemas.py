@@ -107,3 +107,23 @@ class MovieResponse(BaseModel):
     poster_url: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class MovieListItemResponse(BaseModel):
+    id: int
+    uuid: UUID
+    name: str
+    year: int
+    time: int
+    imdb: float
+    votes: int
+    price: Decimal
+    genres: list[NamedEntityResponse]
+    poster_url: str | None = None
+
+
+class MovieListResponse(BaseModel):
+    items: list[MovieListItemResponse]
+    total: int
+    page: int
+    page_size: int

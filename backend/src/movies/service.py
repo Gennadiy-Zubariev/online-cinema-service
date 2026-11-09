@@ -135,6 +135,21 @@ async def get_movie(db: AsyncSession, movie_id: int) -> Movie:
     return movie
 
 
+async def list_movies(
+    db: AsyncSession, page: int, page_size: int
+) -> tuple[list[Movie], int]:
+    stmt = select(Movie)
+
+    total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
+    result = await db.scalars(
+        stmt.options(selectinload(Movie.genres))
+        .order_by(Movie.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    return list(result.all()), total or 0
+
+
 async def update_movie(
     db: AsyncSession, movie_id: int, data: MovieUpdateRequest
 ) -> Movie:

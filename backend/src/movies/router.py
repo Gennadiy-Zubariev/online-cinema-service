@@ -11,6 +11,7 @@ from src.movies.schemas import (
     MovieCreateRequest,
     MovieResponse,
     MovieUpdateRequest,
+    MovieListResponse,
 )
 from src.movies.service import (
     create_named,
@@ -23,6 +24,8 @@ from src.movies.service import (
     delete_movie,
     update_movie_poster,
     MAX_POSTER_SIZE,
+    get_movie,
+    list_movies,
 )
 from src.storage.client import get_file_url
 
@@ -395,6 +398,60 @@ async def add_movie(db: DbSession, data: MovieCreateRequest) -> MovieResponse:
     return _to_movie_response(movie=movie)
 
 
+@router.get(
+    "/movies/{movie_id}",
+    response_model=MovieResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_movie_detail(db: DbSession, movie_id: int) -> MovieResponse:
+    """Get a movie with its certification, genres, directors and stars (public).
+
+    `poster_url` is a temporary link (valid for 1 hour) or null.
+    Returns 404 if the movie does not exist.
+    """
+    movie = await get_movie(db=db, movie_id=movie_id)
+    return _to_movie_response(movie)
+
+
+def _to_movie_list_item(movie: Movie) -> MovieListItemResponse:
+    return MovieListItemResponse(
+        id=movie.id,
+        uuid=movie.uuid,
+        name=movie.name,
+        year=movie.year,
+        time=movie.time,
+        imdb=movie.imdb,
+        votes=movie.votes,
+        price=movie.price,
+        genres=[
+            NamedEntityResponse(id=genre.id, name=genre.name) for genre in movie.genres
+        ],
+        poster_url=get_file_url(movie.poster) if movie.poster else None,
+    )
+
+
+@router.get(
+    "/movies",
+    response_model=MovieListResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_movie_list(db: DbSession, pagination: Pagination) -> MovieListResponse:
+    """List movies of the catalog, ordered by id (public).
+
+    Paginated: `page` starts at 1, `page_size` is 1-100 (default 20).
+    A page past the end returns an empty `items` list.
+    """
+    movies, total = await list_movies(
+        db=db, page=pagination.page, page_size=pagination.page_size
+    )
+    return MovieListResponse(
+        items=[_to_movie_list_item(movie) for movie in movies],
+        total=total,
+        page=pagination.page,
+        page_size=pagination.page_size,
+    )
+
+
 @router.patch(
     "/movies/{movie_id}",
     response_model=MovieResponse,
@@ -414,21 +471,6 @@ async def edit_movie(
     """
     movie = await update_movie(db=db, movie_id=movie_id, data=data)
     return _to_movie_response(movie=movie)
-
-
-@router.delete(
-    "/movies/{movie_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(get_current_moderator)],
-)
-async def remove_movie(db: DbSession, movie_id: int) -> None:
-    """Delete a movie (moderator only).
-
-    Its links to genres, directors and stars are removed as well;
-    the catalog entities themselves are kept.
-    Returns 404 if the movie does not exist.
-    """
-    await delete_movie(db=db, movie_id=movie_id)
 
 
 @router.put(
@@ -451,3 +493,18 @@ async def upload_movie_poster(
         db=db, movie_id=movie_id, data=data, content_type=file.content_type
     )
     return _to_movie_response(movie)
+
+
+@router.delete(
+    "/movies/{movie_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(get_current_moderator)],
+)
+async def remove_movie(db: DbSession, movie_id: int) -> None:
+    """Delete a movie and movie poster(moderator only).
+
+    Its links to genres, directors and stars are removed as well;
+    the catalog entities themselves are kept.
+    Returns 404 if the movie does not exist.
+    """
+    await delete_movie(db=db, movie_id=movie_id)
