@@ -1,4 +1,5 @@
-"""Movie CRUD (moderator): create, update, delete, poster upload.
+"""Movie CRUD (moderator): create, update, delete, poster upload;
+catalog (public): movie detail, movie list.
 
 Catalog entities are referenced by id; the response nests them as {id, name}.
 """
@@ -999,3 +1000,192 @@ async def test_upload_poster_without_file_returns_422(
 
     assert response.status_code == 422
     storage_mock["upload_file"].assert_not_called()
+
+
+# --- detail (public) ---
+
+
+async def test_get_movie_detail_is_public(
+    client: AsyncClient, catalog: Catalog, movie: Movie
+) -> None:
+    response = await client.get(movie_url(movie.id))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == movie.id
+    assert body["uuid"] == str(movie.uuid)
+    assert body["name"] == "Inception"
+    assert body["description"] == (
+        "A thief who steals corporate secrets through dreams."
+    )
+    assert body["price"] == "7.99"
+    assert body["certification"] == {"id": catalog.certification.id, "name": "PG-13"}
+    assert body["genres"] == [{"id": catalog.genres[0].id, "name": "Drama"}]
+    assert body["directors"] == [
+        {"id": catalog.director.id, "name": "Christopher Nolan"}
+    ]
+    assert body["stars"] == [{"id": catalog.star.id, "name": "Cillian Murphy"}]
+    assert body["poster_url"] is None
+
+
+async def test_get_movie_detail_with_poster(
+    client: AsyncClient, db_session: AsyncSession, movie: Movie
+) -> None:
+    movie.poster = "posters/1/poster.jpg"
+    await db_session.commit()
+
+    response = await client.get(movie_url(movie.id))
+
+    assert "/posters/1/poster.jpg?" in response.json()["poster_url"]
+
+
+async def test_get_movie_detail_loads_relations_in_fresh_session(
+    client: AsyncClient, db_session: AsyncSession, movie: Movie
+) -> None:
+    """Nothing is in the identity map: relations must be eager-loaded, not lazy."""
+    db_session.expunge_all()
+
+    response = await client.get(movie_url(movie.id))
+
+    assert response.status_code == 200
+    assert len(response.json()["genres"]) == 1
+
+
+async def test_get_unknown_movie_returns_404(client: AsyncClient) -> None:
+    response = await client.get(movie_url(UNKNOWN_ID))
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Movie not found."}
+
+
+async def test_get_movie_with_non_integer_id_returns_422(client: AsyncClient) -> None:
+    response = await client.get(f"{MOVIES_URL}/abc")
+
+    assert response.status_code == 422
+
+
+# --- list (public) ---
+
+
+async def create_movies(
+    db_session: AsyncSession, catalog: Catalog, count: int
+) -> list[Movie]:
+    """Save `count` movies (Movie 0, Movie 1, ...) linked to the first genre."""
+    movies = [
+        Movie(
+            name=f"Movie {i}",
+            year=2000 + i,
+            time=100,
+            imdb=7.0,
+            votes=1000,
+            description="Description.",
+            price=Decimal("5.00"),
+            certification=catalog.certification,
+            genres=[catalog.genres[0]],
+        )
+        for i in range(count)
+    ]
+    db_session.add_all(movies)
+    await db_session.commit()
+    return movies
+
+
+async def test_list_empty_catalog(client: AsyncClient, create_schema: None) -> None:
+    response = await client.get(MOVIES_URL)
+
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "total": 0, "page": 1, "page_size": 20}
+
+
+async def test_list_is_public_and_returns_short_items(
+    client: AsyncClient, catalog: Catalog, movie: Movie
+) -> None:
+    response = await client.get(MOVIES_URL)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "items": [
+            {
+                "id": movie.id,
+                "uuid": str(movie.uuid),
+                "name": "Inception",
+                "year": 2010,
+                "time": 148,
+                "imdb": 8.8,
+                "votes": 2500000,
+                "price": "7.99",
+                "genres": [{"id": catalog.genres[0].id, "name": "Drama"}],
+                "poster_url": None,
+            }
+        ],
+        "total": 1,
+        "page": 1,
+        "page_size": 20,
+    }
+
+
+async def test_list_item_with_poster(
+    client: AsyncClient, db_session: AsyncSession, movie: Movie
+) -> None:
+    movie.poster = "posters/1/poster.jpg"
+    await db_session.commit()
+
+    response = await client.get(MOVIES_URL)
+
+    assert "/posters/1/poster.jpg?" in response.json()["items"][0]["poster_url"]
+
+
+async def test_list_ordered_by_id_and_paginated(
+    client: AsyncClient, db_session: AsyncSession, catalog: Catalog
+) -> None:
+    movies = await create_movies(db_session, catalog, 5)
+
+    first_page = await client.get(MOVIES_URL, params={"page": 1, "page_size": 2})
+    last_page = await client.get(MOVIES_URL, params={"page": 3, "page_size": 2})
+
+    assert [item["id"] for item in first_page.json()["items"]] == [
+        movies[0].id,
+        movies[1].id,
+    ]
+    assert [item["id"] for item in last_page.json()["items"]] == [movies[4].id]
+    assert last_page.json()["total"] == 5
+    assert last_page.json()["page"] == 3
+    assert last_page.json()["page_size"] == 2
+
+
+async def test_list_page_past_end_is_empty(
+    client: AsyncClient, db_session: AsyncSession, catalog: Catalog
+) -> None:
+    await create_movies(db_session, catalog, 2)
+
+    response = await client.get(MOVIES_URL, params={"page": 5})
+
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+    assert response.json()["total"] == 2
+
+
+async def test_list_loads_genres_in_fresh_session(
+    client: AsyncClient, db_session: AsyncSession, catalog: Catalog
+) -> None:
+    """Nothing is in the identity map: genres must be eager-loaded, not lazy."""
+    await create_movies(db_session, catalog, 3)
+    db_session.expunge_all()
+
+    response = await client.get(MOVIES_URL)
+
+    assert response.status_code == 200
+    assert all(len(item["genres"]) == 1 for item in response.json()["items"])
+
+
+@pytest.mark.parametrize(
+    "params",
+    [{"page": 0}, {"page_size": 0}, {"page_size": 101}],
+    ids=["page_zero", "page_size_zero", "page_size_too_big"],
+)
+async def test_list_invalid_pagination_returns_422(
+    client: AsyncClient, params: dict[str, int]
+) -> None:
+    response = await client.get(MOVIES_URL, params=params)
+
+    assert response.status_code == 422
