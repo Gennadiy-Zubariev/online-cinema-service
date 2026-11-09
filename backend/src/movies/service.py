@@ -15,13 +15,23 @@ from src.movies.exceptions import (
     EntityInUseError,
 )
 from src.movies.models import Genre, Star, Director, Certification, Movie
-from src.movies.schemas import MovieCreateRequest, MovieUpdateRequest, MovieCatalogQuery
+from src.movies.schemas import (
+    MovieCreateRequest,
+    MovieUpdateRequest,
+    MovieCatalogQuery,
+)
 from src.storage.client import upload_file, delete_file
 from src.storage.images import validate_image
 
 NamedModel = TypeVar("NamedModel", Genre, Star, Director, Certification)
 RELATION_ID_FIELDS = {"certification_id", "genre_ids", "director_ids", "star_ids"}
 MAX_POSTER_SIZE = 5 * 1024 * 1024  # 5 MB
+SORT_COLUMNS = {
+    "id": Movie.id,
+    "price": Movie.price,
+    "year": Movie.year,
+    "votes": Movie.votes,
+}
 
 
 async def _commit_unique(db: AsyncSession, model: type[Base]) -> None:
@@ -147,11 +157,12 @@ async def list_movies(
         stmt = stmt.where(Movie.imdb >= params.imdb_min)
     if params.imdb_max is not None:
         stmt = stmt.where(Movie.imdb <= params.imdb_max)
-
+    column = SORT_COLUMNS[params.sort_by]
+    sort = column.desc() if params.order == "desc" else column.asc()
     total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
     result = await db.scalars(
         stmt.options(selectinload(Movie.genres))
-        .order_by(Movie.id)
+        .order_by(sort, Movie.id)
         .offset((page - 1) * page_size)
         .limit(page_size)
     )

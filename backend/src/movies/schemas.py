@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, StringConstraints, ConfigDict, Field, field_validator
@@ -134,3 +134,5 @@ class MovieCatalogQuery(BaseModel):
     year_to: MovieYear | None = None
     imdb_min: ImdbRating | None = None
     imdb_max: ImdbRating | None = None
+    sort_by: Literal["id", "price", "year", "votes"] = "id"
+    order: Literal["asc", "desc"] = "asc"
