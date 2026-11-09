@@ -18,6 +18,7 @@ MetaScore = Annotated[float, Field(ge=0, le=100)]
 Gross = Annotated[float, Field(ge=0)]
 Price = Annotated[Decimal, Field(ge=0, max_digits=10, decimal_places=2)]
 SearchText = Annotated[str, StringConstraints(strip_whitespace=True, max_length=255)]
+Score = Annotated[int, Field(ge=1, le=10)]
 
 
 class NamedEntityRequest(BaseModel):
@@ -142,3 +143,7 @@ class MovieCatalogQuery(BaseModel):
 
 class MovieReactionRequest(BaseModel):
     is_like: bool
+
+
+class MovieRatingRequest(BaseModel):
+    score: Score

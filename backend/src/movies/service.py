@@ -15,7 +15,15 @@ from src.movies.exceptions import (
     EntityNotFoundError,
     EntityInUseError,
 )
-from src.movies.models import Genre, Star, Director, Certification, Movie, MovieReaction
+from src.movies.models import (
+    Genre,
+    Star,
+    Director,
+    Certification,
+    Movie,
+    MovieReaction,
+    MovieRating,
+)
 from src.movies.schemas import (
     MovieCreateRequest,
     MovieUpdateRequest,
@@ -257,6 +265,30 @@ async def delete_movie_reaction(db: AsyncSession, user_id: int, movie_id: int) -
     await db.execute(
         delete(MovieReaction).where(
             MovieReaction.user_id == user_id, MovieReaction.movie_id == movie_id
+        )
+    )
+    await db.commit()
+
+
+async def set_movie_rating(
+    db: AsyncSession, user_id: int, movie_id: int, score: int
+) -> None:
+    if await db.get(Movie, movie_id) is None:
+        raise EntityNotFoundError(Movie.__name__)
+
+    stmt = insert(MovieRating).values(user_id=user_id, movie_id=movie_id, score=score)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["user_id", "movie_id"],
+        set_={"score": score},
+    )
+    await db.execute(stmt)
+    await db.commit()
+
+
+async def delete_movie_rating(db: AsyncSession, user_id: int, movie_id: int) -> None:
+    await db.execute(
+        delete(MovieRating).where(
+            MovieRating.user_id == user_id, MovieRating.movie_id == movie_id
         )
     )
     await db.commit()

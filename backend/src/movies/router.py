@@ -17,6 +17,7 @@ from src.movies.schemas import (
     MovieListItemResponse,
     MovieCatalogQuery,
     MovieReactionRequest,
+    MovieRatingRequest,
 )
 from src.movies.service import (
     create_named,
@@ -33,6 +34,8 @@ from src.movies.service import (
     list_movies,
     set_movie_reaction,
     delete_movie_reaction,
+    set_movie_rating,
+    delete_movie_rating,
 )
 from src.storage.client import get_file_url
 
@@ -556,3 +559,34 @@ async def remove_movie_reaction(
     Idempotent: returns 204 even if there was no reaction.
     """
     await delete_movie_reaction(db=db, user_id=current_user.id, movie_id=movie_id)
+
+
+@router.put(
+    "/movies/{movie_id}/rating",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def put_movie_rating(
+    db: DbSession, current_user: CurrentUser, movie_id: int, data: MovieRatingRequest
+) -> None:
+    """Rate a movie from 1 to 10.
+
+    A user has at most one rating per movie: a new one replaces the old.
+    Returns 404 if the movie does not exist.
+    """
+    await set_movie_rating(
+        db=db, user_id=current_user.id, movie_id=movie_id, score=data.score
+    )
+
+
+@router.delete(
+    "/movies/{movie_id}/rating",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_movie_rating(
+    db: DbSession, current_user: CurrentUser, movie_id: int
+) -> None:
+    """Remove the current user's rating of a movie.
+
+    Idempotent: returns 204 even if there was no rating.
+    """
+    await delete_movie_rating(db=db, user_id=current_user.id, movie_id=movie_id)
