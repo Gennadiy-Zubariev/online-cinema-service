@@ -9,6 +9,8 @@ from sqlalchemy import (
     Column,
     ForeignKey,
     Table,
+    CheckConstraint,
+    SmallInteger,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -126,3 +128,28 @@ class Movie(Base):
     stars: Mapped[list[Star]] = relationship(
         secondary=movie_stars, back_populates="movies", passive_deletes=True
     )
+
+
+class MovieReaction(Base):
+    __tablename__ = "movie_reactions"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    movie_id: Mapped[int] = mapped_column(
+        ForeignKey("movies.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+    is_like: Mapped[bool]
+
+
+class MovieRating(Base):
+    __tablename__ = "movie_ratings"
+    __table_args__ = (CheckConstraint("score BETWEEN 1 AND 10", name="score_range"),)
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    movie_id: Mapped[int] = mapped_column(
+        ForeignKey("movies.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+    score: Mapped[int] = mapped_column(SmallInteger)
