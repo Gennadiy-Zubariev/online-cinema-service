@@ -17,6 +17,7 @@ from src.movies.schemas import MovieCreateRequest, MovieUpdateRequest
 
 NamedModel = TypeVar("NamedModel", Genre, Star, Director, Certification)
 RELATION_ID_FIELDS = {"certification_id", "genre_ids", "director_ids", "star_ids"}
+MAX_POSTER_SIZE = 5 * 1024 * 1024  # 5 MB
 
 
 async def _commit_unique(db: AsyncSession, model: type[Base]) -> None:

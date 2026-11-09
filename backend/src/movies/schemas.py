@@ -104,5 +104,6 @@ class MovieResponse(BaseModel):
     genres: list[NamedEntityResponse]
     directors: list[NamedEntityResponse]
     stars: list[NamedEntityResponse]
+    poster_url: str | None = None
 
     model_config = ConfigDict(from_attributes=True)

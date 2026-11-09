@@ -165,6 +165,7 @@ async def test_create(
         {"id": catalog.director.id, "name": "Christopher Nolan"}
     ]
     assert body["stars"] == [{"id": catalog.star.id, "name": "Cillian Murphy"}]
+    assert body["poster_url"] is None
 
     stored_genre_links = await db_session.scalar(
         select(func.count())
@@ -457,6 +458,26 @@ async def test_update_with_empty_body_changes_nothing(
     assert response.status_code == 200
     assert response.json()["name"] == "Inception"
     assert response.json()["price"] == "7.99"
+
+
+async def test_update_returns_presigned_poster_url(
+    client: AsyncClient,
+    create_user: CreateUser,
+    db_session: AsyncSession,
+    movie: Movie,
+) -> None:
+    movie.poster = "posters/1/poster.jpg"
+    await db_session.commit()
+    caller = await create_caller(create_user)
+
+    response = await client.patch(
+        movie_url(movie.id), json={}, headers=auth_header(caller)
+    )
+
+    poster_url = response.json()["poster_url"]
+    assert poster_url.startswith(get_settings().S3_PUBLIC_ENDPOINT_URL)
+    assert "/posters/1/poster.jpg?" in poster_url
+    assert "X-Amz-Signature=" in poster_url
 
 
 async def test_update_clears_nullable_fields(

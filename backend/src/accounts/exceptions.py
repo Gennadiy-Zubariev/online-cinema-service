@@ -48,11 +48,3 @@ class PermissionDeniedError(AccountsError):
 
 class UserNotFoundError(AccountsError):
     """Raised when no user exists with the given id."""
-
-
-class UnsupportedAvatarTypeError(AccountsError):
-    """Raised when the avatar is not a JPEG, PNG or WebP image."""
-
-
-class AvatarTooLargeError(AccountsError):
-    """Raised when the avatar exceeds the maximum allowed size."""

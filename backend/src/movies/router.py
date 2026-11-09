@@ -22,6 +22,7 @@ from src.movies.service import (
     update_movie,
     delete_movie,
 )
+from src.storage.client import get_file_url
 
 router = APIRouter(tags=["movies"])
 
@@ -346,13 +347,41 @@ async def delete_certification(db: DbSession, certification_id: int) -> None:
     await delete_named(db=db, model=Certification, entity_id=certification_id)
 
 
+def _to_movie_response(movie: Movie) -> MovieResponse:
+    return MovieResponse(
+        id=movie.id,
+        uuid=movie.uuid,
+        name=movie.name,
+        year=movie.year,
+        time=movie.time,
+        imdb=movie.imdb,
+        votes=movie.votes,
+        meta_score=movie.meta_score,
+        gross=movie.gross,
+        description=movie.description,
+        price=movie.price,
+        certification=NamedEntityResponse(
+            id=movie.certification.id, name=movie.certification.name
+        ),
+        genres=[
+            NamedEntityResponse(id=genre.id, name=genre.name) for genre in movie.genres
+        ],
+        directors=[
+            NamedEntityResponse(id=director.id, name=director.name)
+            for director in movie.directors
+        ],
+        stars=[NamedEntityResponse(id=star.id, name=star.name) for star in movie.stars],
+        poster_url=get_file_url(movie.poster) if movie.poster else None,
+    )
+
+
 @router.post(
     "/movies",
     response_model=MovieResponse,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(get_current_moderator)],
 )
-async def add_movie(db: DbSession, data: MovieCreateRequest) -> Movie:
+async def add_movie(db: DbSession, data: MovieCreateRequest) -> MovieResponse:
     """Create a movie (moderator only).
 
     Catalog entities are referenced by id: `certification_id` is required,
@@ -360,7 +389,8 @@ async def add_movie(db: DbSession, data: MovieCreateRequest) -> Movie:
     Returns 404 if any referenced entity does not exist.
     Returns 409 if a movie with the same name, year and duration already exists.
     """
-    return await create_movie(db=db, data=data)
+    movie = await create_movie(db=db, data=data)
+    return _to_movie_response(movie=movie)
 
 
 @router.patch(
@@ -369,7 +399,9 @@ async def add_movie(db: DbSession, data: MovieCreateRequest) -> Movie:
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(get_current_moderator)],
 )
-async def edit_movie(db: DbSession, movie_id: int, data: MovieUpdateRequest) -> Movie:
+async def edit_movie(
+    db: DbSession, movie_id: int, data: MovieUpdateRequest
+) -> MovieResponse:
     """Partially update a movie (moderator only).
 
     Only the fields sent are changed; `meta_score` and `gross` can be cleared
@@ -378,7 +410,8 @@ async def edit_movie(db: DbSession, movie_id: int, data: MovieUpdateRequest) -> 
     Returns 404 if the movie or any referenced entity does not exist.
     Returns 409 if another movie has the same name, year and duration.
     """
-    return await update_movie(db=db, movie_id=movie_id, data=data)
+    movie = await update_movie(db=db, movie_id=movie_id, data=data)
+    return _to_movie_response(movie=movie)
 
 
 @router.delete(

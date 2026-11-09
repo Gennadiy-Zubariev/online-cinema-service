@@ -1,8 +1,6 @@
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
 
-from src.accounts.service import MAX_AVATAR_SIZE
-
 
 async def user_already_exists_handler(request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(
@@ -94,22 +92,4 @@ async def user_not_found_handler(request: Request, exc: Exception) -> JSONRespon
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND,
         content={"detail": "User not found."},
-    )
-
-
-async def unsupported_avatar_type_handler(
-    request: Request, exc: Exception
-) -> JSONResponse:
-    return JSONResponse(
-        status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-        content={"detail": "Avatar must be a JPEG, PNG or WebP image."},
-    )
-
-
-async def avatar_too_large_handler(request: Request, exc: Exception) -> JSONResponse:
-    return JSONResponse(
-        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-        content={
-            "detail": f"Avatar must not exceed {MAX_AVATAR_SIZE // (1024 * 1024)} MB."
-        },
     )
