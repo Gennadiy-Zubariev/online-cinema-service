@@ -1,10 +1,12 @@
 from typing import TypeVar
+from uuid import uuid4
 
 from psycopg.errors import UniqueViolation, ForeignKeyViolation
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
+from starlette.concurrency import run_in_threadpool
 
 from src.database.base import Base
 from src.movies.exceptions import (
@@ -14,6 +16,8 @@ from src.movies.exceptions import (
 )
 from src.movies.models import Genre, Star, Director, Certification, Movie
 from src.movies.schemas import MovieCreateRequest, MovieUpdateRequest
+from src.storage.client import upload_file, delete_file
+from src.storage.images import validate_image
 
 NamedModel = TypeVar("NamedModel", Genre, Star, Director, Certification)
 RELATION_ID_FIELDS = {"certification_id", "genre_ids", "director_ids", "star_ids"}
@@ -164,3 +168,20 @@ async def delete_movie(db: AsyncSession, movie_id: int) -> None:
         raise EntityNotFoundError(Movie.__name__)
     await db.delete(movie)
     await db.commit()
+
+
+async def update_movie_poster(
+    db: AsyncSession, movie_id: int, data: bytes, content_type: str | None
+) -> Movie:
+    content_type, extension = validate_image(data, content_type, MAX_POSTER_SIZE)
+    movie = await get_movie(db=db, movie_id=movie_id)
+
+    old_key = movie.poster
+    new_key = f"posters/{movie_id}/{uuid4().hex}.{extension}"
+    await run_in_threadpool(upload_file, new_key, data, content_type)
+    movie.poster = new_key
+    await db.commit()
+
+    if old_key is not None:
+        await run_in_threadpool(delete_file, old_key)
+    return movie

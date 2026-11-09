@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, UploadFile
 
 from src.accounts.dependencies import get_current_moderator
 from src.common.pagination import Pagination
@@ -21,6 +21,8 @@ from src.movies.service import (
     create_movie,
     update_movie,
     delete_movie,
+    update_movie_poster,
+    MAX_POSTER_SIZE,
 )
 from src.storage.client import get_file_url
 
@@ -427,3 +429,25 @@ async def remove_movie(db: DbSession, movie_id: int) -> None:
     Returns 404 if the movie does not exist.
     """
     await delete_movie(db=db, movie_id=movie_id)
+
+
+@router.put(
+    "/movies/{movie_id}/poster",
+    response_model=MovieResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(get_current_moderator)],
+)
+async def upload_movie_poster(
+    db: DbSession, movie_id: int, file: UploadFile
+) -> MovieResponse:
+    """Upload or replace a movie poster (moderator only).
+
+    Accepts JPEG, PNG or WebP up to 5 MB (415 / 413 otherwise).
+    The previous poster file is deleted.
+    Returns 404 if the movie does not exist.
+    """
+    data = await file.read(MAX_POSTER_SIZE + 1)
+    movie = await update_movie_poster(
+        db=db, movie_id=movie_id, data=data, content_type=file.content_type
+    )
+    return _to_movie_response(movie)
