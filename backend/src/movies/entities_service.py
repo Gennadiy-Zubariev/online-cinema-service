@@ -11,7 +11,7 @@ from src.movies.exceptions import (
     EntityNotFoundError,
     EntityInUseError,
 )
-from src.movies.models import Genre, Star, Director, Certification
+from src.movies.models import Genre, Star, Director, Certification, movie_genres
 
 NamedModel = TypeVar("NamedModel", Genre, Star, Director, Certification)
 
@@ -75,3 +75,18 @@ async def delete_named(
         if isinstance(error.orig, ForeignKeyViolation):
             raise EntityInUseError(model.__name__) from error
         raise
+
+
+async def list_genres_with_movie_count(
+    db: AsyncSession, page: int, page_size: int
+) -> tuple[list[tuple[Genre, int]], int]:
+    total = await db.scalar(select(func.count()).select_from(Genre))
+    result = await db.execute(
+        select(Genre, func.count(movie_genres.c.movie_id))
+        .outerjoin(movie_genres, movie_genres.c.genre_id == Genre.id)
+        .group_by(Genre.id)
+        .order_by(Genre.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    return [(genre, count) for genre, count in result.all()], total or 0

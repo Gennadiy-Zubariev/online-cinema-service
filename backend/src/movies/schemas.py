@@ -43,6 +43,17 @@ class NamedEntityListResponse(BaseModel):
     page_size: int
 
 
+class GenreResponse(NamedEntityResponse):
+    movies_count: int
+
+
+class GenreListResponse(BaseModel):
+    items: list[GenreResponse]
+    total: int
+    page: int
+    page_size: int
+
+
 class MovieCreateRequest(BaseModel):
     name: EntityName
     year: MovieYear

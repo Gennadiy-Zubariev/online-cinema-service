@@ -9,12 +9,15 @@ from src.movies.entities_service import (
     get_named,
     update_named,
     delete_named,
+    list_genres_with_movie_count,
 )
 from src.movies.models import Certification, Director, Genre, Star
 from src.movies.schemas import (
     NamedEntityRequest,
     NamedEntityResponse,
     NamedEntityListResponse,
+    GenreListResponse,
+    GenreResponse,
 )
 
 router = APIRouter(tags=["movies"])
@@ -35,20 +38,22 @@ async def create_genre(db: DbSession, data: NamedEntityRequest) -> Genre:
     return await create_named(db=db, model=Genre, name=data.name)
 
 
-@router.get(
-    "/genres", status_code=status.HTTP_200_OK, response_model=NamedEntityListResponse
-)
-async def list_genres(db: DbSession, pagination: Pagination) -> NamedEntityListResponse:
-    """List genres, ordered by id (public).
+@router.get("/genres", status_code=status.HTTP_200_OK, response_model=GenreListResponse)
+async def list_genres(db: DbSession, pagination: Pagination) -> GenreListResponse:
+    """List genres with the number of movies in each, ordered by id (public).
 
+    Genres without movies are included (`movies_count` is 0).
     Paginated: `page` starts at 1, `page_size` is 1-100 (default 20).
     A page past the end returns an empty `items` list.
     """
-    genres, total = await list_named(
-        db=db, model=Genre, page=pagination.page, page_size=pagination.page_size
+    genres, total = await list_genres_with_movie_count(
+        db=db, page=pagination.page, page_size=pagination.page_size
     )
-    return NamedEntityListResponse(
-        items=[NamedEntityResponse.model_validate(genre) for genre in genres],
+    return GenreListResponse(
+        items=[
+            GenreResponse(id=genre.id, name=genre.name, movies_count=count)
+            for genre, count in genres
+        ],
         total=total,
         page=pagination.page,
         page_size=pagination.page_size,
