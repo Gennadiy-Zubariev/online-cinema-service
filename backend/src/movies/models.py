@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 from uuid import uuid4, UUID
 
@@ -11,6 +12,8 @@ from sqlalchemy import (
     Table,
     CheckConstraint,
     SmallInteger,
+    DateTime,
+    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -153,3 +156,35 @@ class MovieRating(Base):
         ForeignKey("movies.id", ondelete="CASCADE"), primary_key=True, index=True
     )
     score: Mapped[int] = mapped_column(SmallInteger)
+
+
+class MovieComment(Base):
+    __tablename__ = "movie_comments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    movie_id: Mapped[int] = mapped_column(
+        ForeignKey("movies.id", ondelete="CASCADE"), index=True
+    )
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("movie_comments.id", ondelete="CASCADE"), index=True
+    )
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class CommentLike(Base):
+    __tablename__ = "comment_likes"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    comment_id: Mapped[int] = mapped_column(
+        ForeignKey("movie_comments.id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
