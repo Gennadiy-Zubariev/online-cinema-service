@@ -43,6 +43,42 @@ async def comment(db_session: AsyncSession, user: User, movie: Movie) -> MovieCo
     return result
 
 
+@pytest.fixture
+async def other_movie(db_session: AsyncSession, catalog: Catalog) -> Movie:
+    result = Movie(
+        name="Interstellar",
+        year=2014,
+        time=169,
+        imdb=8.7,
+        votes=2000000,
+        description="Explorers travel through a wormhole.",
+        price=Decimal("6.99"),
+        certification=catalog.certification,
+    )
+    db_session.add(result)
+    await db_session.commit()
+    return result
+
+
+async def save_comment(
+    db_session: AsyncSession,
+    user: User,
+    movie: Movie,
+    text: str,
+    parent: MovieComment | None = None,
+) -> MovieComment:
+    """Save a comment (or a reply to `parent`) directly in the DB."""
+    result = MovieComment(
+        user_id=user.id,
+        movie_id=movie.id,
+        parent_id=parent.id if parent else None,
+        text=text,
+    )
+    db_session.add(result)
+    await db_session.commit()
+    return result
+
+
 async def stored_comments(db_session: AsyncSession) -> list[MovieComment]:
     result = await db_session.scalars(select(MovieComment).order_by(MovieComment.id))
     return list(result.all())
@@ -192,22 +228,9 @@ async def test_reply_to_comment_of_another_movie_returns_404(
     client: AsyncClient,
     db_session: AsyncSession,
     user: User,
-    catalog: Catalog,
+    other_movie: Movie,
     comment: MovieComment,
 ) -> None:
-    other_movie = Movie(
-        name="Interstellar",
-        year=2014,
-        time=169,
-        imdb=8.7,
-        votes=2000000,
-        description="Explorers travel through a wormhole.",
-        price=Decimal("6.99"),
-        certification=catalog.certification,
-    )
-    db_session.add(other_movie)
-    await db_session.commit()
-
     response = await client.post(
         comments_url(other_movie.id),
         json={"text": "Agree!", "parent_id": comment.id},
@@ -255,3 +278,163 @@ async def test_reply_to_comment_of_unknown_movie_returns_movie_404(
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Movie not found."}
+
+
+# --- list (public) ---
+
+
+def texts(items: list[dict[str, Any]]) -> list[str]:
+    return [item["text"] for item in items]
+
+
+async def test_list_comments_of_movie_without_comments(
+    client: AsyncClient, movie: Movie
+) -> None:
+    response = await client.get(comments_url(movie.id))
+
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "total": 0, "page": 1, "page_size": 20}
+
+
+async def test_list_comments_is_public_and_nests_replies(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    movie: Movie,
+    comment: MovieComment,
+) -> None:
+    reply = await save_comment(db_session, user, movie, "Agree!", parent=comment)
+
+    response = await client.get(comments_url(movie.id))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    [item] = body["items"]
+    assert item["id"] == comment.id
+    assert item["user_id"] == user.id
+    assert item["movie_id"] == movie.id
+    assert item["parent_id"] is None
+    assert item["text"] == "Great movie!"
+    assert item["created_at"] is not None
+    [nested] = item["replies"]
+    assert nested["id"] == reply.id
+    assert nested["parent_id"] == comment.id
+    assert nested["text"] == "Agree!"
+    assert "replies" not in nested
+
+
+async def test_list_comments_orders_roots_newest_first_and_replies_oldest_first(
+    client: AsyncClient, db_session: AsyncSession, user: User, movie: Movie
+) -> None:
+    first = await save_comment(db_session, user, movie, "First")
+    await save_comment(db_session, user, movie, "Second")
+    await save_comment(db_session, user, movie, "Reply 1", parent=first)
+    await save_comment(db_session, user, movie, "Reply 2", parent=first)
+
+    response = await client.get(comments_url(movie.id))
+
+    items = response.json()["items"]
+    assert texts(items) == ["Second", "First"]
+    assert texts(items[1]["replies"]) == ["Reply 1", "Reply 2"]
+    assert items[0]["replies"] == []
+
+
+async def test_list_comments_total_counts_only_root_comments(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    movie: Movie,
+    comment: MovieComment,
+) -> None:
+    for text in ["Agree!", "Me too!"]:
+        await save_comment(db_session, user, movie, text, parent=comment)
+
+    response = await client.get(comments_url(movie.id))
+
+    body = response.json()
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+
+
+async def test_list_comments_excludes_other_movies(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    movie: Movie,
+    other_movie: Movie,
+    comment: MovieComment,
+) -> None:
+    await save_comment(db_session, user, other_movie, "Other movie comment")
+
+    response = await client.get(comments_url(movie.id))
+
+    body = response.json()
+    assert texts(body["items"]) == ["Great movie!"]
+    assert body["total"] == 1
+
+
+@pytest.mark.parametrize(
+    ("page", "expected"),
+    [(1, ["Comment 2", "Comment 1"]), (2, ["Comment 0"]), (3, [])],
+    ids=["first", "last", "past_end"],
+)
+async def test_list_comments_pagination(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    movie: Movie,
+    page: int,
+    expected: list[str],
+) -> None:
+    for i in range(3):
+        await save_comment(db_session, user, movie, f"Comment {i}")
+
+    response = await client.get(
+        comments_url(movie.id), params={"page": page, "page_size": 2}
+    )
+
+    body = response.json()
+    assert texts(body["items"]) == expected
+    assert body["total"] == 3
+    assert body["page"] == page
+    assert body["page_size"] == 2
+
+
+async def test_list_comments_loads_replies_in_fresh_session(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    movie: Movie,
+    comment: MovieComment,
+) -> None:
+    """Nothing is in the identity map: replies must be eager-loaded, not lazy."""
+    await save_comment(db_session, user, movie, "Agree!", parent=comment)
+    db_session.expunge_all()
+
+    response = await client.get(comments_url(movie.id))
+
+    assert response.status_code == 200
+    assert len(response.json()["items"][0]["replies"]) == 1
+
+
+async def test_list_comments_of_unknown_movie_returns_404(
+    client: AsyncClient, create_schema: None
+) -> None:
+    response = await client.get(comments_url(UNKNOWN_ID))
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Movie not found."}
+
+
+@pytest.mark.parametrize(
+    "params",
+    [{"page": 0}, {"page_size": 0}, {"page_size": 101}],
+    ids=["page_zero", "page_size_zero", "page_size_too_big"],
+)
+async def test_list_comments_invalid_pagination_returns_422(
+    client: AsyncClient, movie: Movie, params: dict[str, int]
+) -> None:
+    response = await client.get(comments_url(movie.id), params=params)
+
+    assert response.status_code == 422
