@@ -53,6 +53,8 @@ async def list_catalog_movies(
         stmt = stmt.where(Movie.imdb >= params.imdb_min)
     if params.imdb_max is not None:
         stmt = stmt.where(Movie.imdb <= params.imdb_max)
+    if params.genre_id is not None:
+        stmt = stmt.where(Movie.genres.any(Genre.id == params.genre_id))
     if params.search:
         stmt = stmt.where(
             or_(

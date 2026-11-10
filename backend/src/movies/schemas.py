@@ -158,6 +158,7 @@ class MovieCatalogQuery(BaseModel):
     year_to: MovieYear | None = None
     imdb_min: ImdbRating | None = None
     imdb_max: ImdbRating | None = None
+    genre_id: int | None = None
     sort_by: Literal["id", "price", "year", "votes"] = "id"
     order: Literal["asc", "desc"] = "asc"
     search: SearchText | None = None
