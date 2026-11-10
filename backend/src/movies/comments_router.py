@@ -3,7 +3,12 @@ from fastapi import APIRouter, status
 from src.accounts.dependencies import CurrentUser
 from src.common.pagination import Pagination
 from src.database.session import DbSession
-from src.movies.comments_service import create_comment, list_comments
+from src.movies.comments_service import (
+    create_comment,
+    list_comments,
+    set_comment_like,
+    delete_comment_like,
+)
 from src.movies.models import MovieComment
 from src.movies.schemas import (
     CommentCreateRequest,
@@ -58,3 +63,32 @@ async def get_comment_list(
         page=pagination.page,
         page_size=pagination.page_size,
     )
+
+
+@router.put(
+    "/comments/{comment_id}/like",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def put_comment_like(
+    db: DbSession, current_user: CurrentUser, comment_id: int
+) -> None:
+    """Like a comment or a reply.
+
+    Idempotent: liking an already liked comment changes nothing.
+    Returns 404 if the comment does not exist.
+    """
+    await set_comment_like(db=db, user_id=current_user.id, comment_id=comment_id)
+
+
+@router.delete(
+    "/comments/{comment_id}/like",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_comment_like(
+    db: DbSession, current_user: CurrentUser, comment_id: int
+) -> None:
+    """Remove the current user's like from a comment.
+
+    Idempotent: returns 204 even if there was no like.
+    """
+    await delete_comment_like(db=db, user_id=current_user.id, comment_id=comment_id)

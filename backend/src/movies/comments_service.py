@@ -1,9 +1,10 @@
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.movies.exceptions import EntityNotFoundError, NestedReplyError
-from src.movies.models import Movie, MovieComment
+from src.movies.models import Movie, MovieComment, CommentLike
 from src.movies.schemas import CommentCreateRequest
 
 
@@ -42,3 +43,22 @@ async def list_comments(
         .limit(page_size)
     )
     return list(result.all()), total or 0
+
+
+async def set_comment_like(db: AsyncSession, user_id: int, comment_id: int) -> None:
+    if await db.get(MovieComment, comment_id) is None:
+        raise EntityNotFoundError("Comment")
+
+    stmt = insert(CommentLike).values(user_id=user_id, comment_id=comment_id)
+    stmt = stmt.on_conflict_do_nothing(index_elements=["user_id", "comment_id"])
+    await db.execute(stmt)
+    await db.commit()
+
+
+async def delete_comment_like(db: AsyncSession, user_id: int, comment_id: int) -> None:
+    await db.execute(
+        delete(CommentLike).where(
+            CommentLike.user_id == user_id, CommentLike.comment_id == comment_id
+        )
+    )
+    await db.commit()
