@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, Select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 from starlette.concurrency import run_in_threadpool
@@ -36,6 +36,44 @@ async def _get_named_by_ids(
     if len(entities) != len(ids):
         raise EntityNotFoundError(model.__name__)
     return entities
+
+
+async def list_catalog_movies(
+    db: AsyncSession,
+    stmt: Select[Movie],
+    params: MovieCatalogQuery,
+    page: int,
+    page_size: int,
+) -> tuple[list[Movie], int]:
+    if params.year_from is not None:
+        stmt = stmt.where(Movie.year >= params.year_from)
+    if params.year_to is not None:
+        stmt = stmt.where(Movie.year <= params.year_to)
+    if params.imdb_min is not None:
+        stmt = stmt.where(Movie.imdb >= params.imdb_min)
+    if params.imdb_max is not None:
+        stmt = stmt.where(Movie.imdb <= params.imdb_max)
+    if params.search:
+        stmt = stmt.where(
+            or_(
+                Movie.name.icontains(params.search, autoescape=True),
+                Movie.description.icontains(params.search, autoescape=True),
+                Movie.stars.any(Star.name.icontains(params.search, autoescape=True)),
+                Movie.directors.any(
+                    Director.name.icontains(params.search, autoescape=True)
+                ),
+            )
+        )
+    column = SORT_COLUMNS[params.sort_by]
+    sort = column.desc() if params.order == "desc" else column.asc()
+    total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
+    result = await db.scalars(
+        stmt.options(selectinload(Movie.genres))
+        .order_by(sort, Movie.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    return list(result.all()), total or 0
 
 
 async def create_movie(
@@ -79,36 +117,9 @@ async def get_movie(db: AsyncSession, movie_id: int) -> Movie:
 async def list_movies(
     db: AsyncSession, params: MovieCatalogQuery, page: int, page_size: int
 ) -> tuple[list[Movie], int]:
-    stmt = select(Movie)
-    if params.year_from is not None:
-        stmt = stmt.where(Movie.year >= params.year_from)
-    if params.year_to is not None:
-        stmt = stmt.where(Movie.year <= params.year_to)
-    if params.imdb_min is not None:
-        stmt = stmt.where(Movie.imdb >= params.imdb_min)
-    if params.imdb_max is not None:
-        stmt = stmt.where(Movie.imdb <= params.imdb_max)
-    if params.search:
-        stmt = stmt.where(
-            or_(
-                Movie.name.icontains(params.search, autoescape=True),
-                Movie.description.icontains(params.search, autoescape=True),
-                Movie.stars.any(Star.name.icontains(params.search, autoescape=True)),
-                Movie.directors.any(
-                    Director.name.icontains(params.search, autoescape=True)
-                ),
-            )
-        )
-    column = SORT_COLUMNS[params.sort_by]
-    sort = column.desc() if params.order == "desc" else column.asc()
-    total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
-    result = await db.scalars(
-        stmt.options(selectinload(Movie.genres))
-        .order_by(sort, Movie.id)
-        .offset((page - 1) * page_size)
-        .limit(page_size)
+    return await list_catalog_movies(
+        db=db, stmt=select(Movie), params=params, page=page, page_size=page_size
     )
-    return list(result.all()), total or 0
 
 
 async def update_movie(

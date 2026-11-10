@@ -6,6 +6,15 @@ from src.accounts.dependencies import get_current_moderator
 from src.common.pagination import Pagination
 from src.database.session import DbSession
 from src.movies.models import Movie
+from src.movies.movies_service import (
+    create_movie,
+    update_movie,
+    delete_movie,
+    update_movie_poster,
+    MAX_POSTER_SIZE,
+    get_movie,
+    list_movies,
+)
 from src.movies.reactions_service import get_movie_stats
 from src.movies.schemas import (
     NamedEntityResponse,
@@ -16,15 +25,6 @@ from src.movies.schemas import (
     MovieListItemResponse,
     MovieCatalogQuery,
     MovieDetailResponse,
-)
-from src.movies.movies_service import (
-    create_movie,
-    update_movie,
-    delete_movie,
-    update_movie_poster,
-    MAX_POSTER_SIZE,
-    get_movie,
-    list_movies,
 )
 from src.storage.client import get_file_url
 
@@ -100,7 +100,7 @@ async def get_movie_detail(db: DbSession, movie_id: int) -> MovieDetailResponse:
     )
 
 
-def _to_movie_list_item(movie: Movie) -> MovieListItemResponse:
+def to_movie_list_item(movie: Movie) -> MovieListItemResponse:
     return MovieListItemResponse(
         id=movie.id,
         uuid=movie.uuid,
@@ -142,7 +142,7 @@ async def get_movie_list(
         db=db, params=params, page=pagination.page, page_size=pagination.page_size
     )
     return MovieListResponse(
-        items=[_to_movie_list_item(movie) for movie in movies],
+        items=[to_movie_list_item(movie) for movie in movies],
         total=total,
         page=pagination.page,
         page_size=pagination.page_size,
