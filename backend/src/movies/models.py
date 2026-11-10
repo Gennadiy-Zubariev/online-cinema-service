@@ -190,3 +190,17 @@ class CommentLike(Base):
         primary_key=True,
         index=True,
     )
+
+
+class FavoriteMovie(Base):
+    __tablename__ = "favorite_movies"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    movie_id: Mapped[int] = mapped_column(
+        ForeignKey("movies.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+    added_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

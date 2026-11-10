@@ -46,6 +46,7 @@ from src.movies.exceptions import (
     EntityInUseError,
     NestedReplyError,
 )
+from src.movies.favorites_router import router as movie_favorites_router
 from src.movies.movies_router import router as movies_router
 from src.movies.reactions_router import router as movie_reactions_router
 from src.storage.client import ensure_bucket_exists
@@ -101,3 +102,4 @@ app.include_router(movie_entities_router, prefix=API_PREFIX)
 app.include_router(movies_router, prefix=API_PREFIX)
 app.include_router(movie_reactions_router, prefix=API_PREFIX)
 app.include_router(movie_comments_router, prefix=API_PREFIX)
+app.include_router(movie_favorites_router, prefix=API_PREFIX)
