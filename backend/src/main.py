@@ -32,19 +32,22 @@ from src.accounts.exceptions import (
 )
 from src.accounts.router import router as accounts_router
 from src.config.settings import get_settings
+from src.movies.comments_router import router as movie_comments_router
+from src.movies.entities_router import router as movie_entities_router
 from src.movies.exception_handlers import (
     entity_not_found_handler,
     entity_already_exists_handler,
     entity_in_use_handler,
+    nested_reply_handler,
 )
 from src.movies.exceptions import (
     EntityNotFoundError,
     EntityAlreadyExistsError,
     EntityInUseError,
+    NestedReplyError,
 )
-from src.movies.entities_router import router as movie_entities_router
-from src.movies.reactions_router import router as movie_reactions_router
 from src.movies.movies_router import router as movies_router
+from src.movies.reactions_router import router as movie_reactions_router
 from src.storage.client import ensure_bucket_exists
 from src.storage.exception_handlers import (
     unsupported_image_type_handler,
@@ -84,6 +87,7 @@ app.add_exception_handler(ImageTooLargeError, image_too_large_handler)
 app.add_exception_handler(EntityNotFoundError, entity_not_found_handler)
 app.add_exception_handler(EntityAlreadyExistsError, entity_already_exists_handler)
 app.add_exception_handler(EntityInUseError, entity_in_use_handler)
+app.add_exception_handler(NestedReplyError, nested_reply_handler)
 
 
 @app.get("/health")
@@ -96,3 +100,4 @@ app.include_router(accounts_router, prefix=API_PREFIX)
 app.include_router(movie_entities_router, prefix=API_PREFIX)
 app.include_router(movies_router, prefix=API_PREFIX)
 app.include_router(movie_reactions_router, prefix=API_PREFIX)
+app.include_router(movie_comments_router, prefix=API_PREFIX)

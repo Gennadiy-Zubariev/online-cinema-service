@@ -24,3 +24,10 @@ async def entity_in_use_handler(request: Request, exc: Exception) -> JSONRespons
         status_code=status.HTTP_409_CONFLICT,
         content={"detail": f"{exc}."},
     )
+
+
+async def nested_reply_handler(request: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={"detail": f"{exc}."},
+    )

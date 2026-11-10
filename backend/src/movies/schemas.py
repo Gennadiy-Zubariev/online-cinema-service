@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 from uuid import UUID
@@ -19,6 +20,9 @@ Gross = Annotated[float, Field(ge=0)]
 Price = Annotated[Decimal, Field(ge=0, max_digits=10, decimal_places=2)]
 SearchText = Annotated[str, StringConstraints(strip_whitespace=True, max_length=255)]
 Score = Annotated[int, Field(ge=1, le=10)]
+CommentText = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
+]
 
 
 class NamedEntityRequest(BaseModel):
@@ -154,3 +158,19 @@ class MovieReactionRequest(BaseModel):
 
 class MovieRatingRequest(BaseModel):
     score: Score
+
+
+class CommentCreateRequest(BaseModel):
+    text: CommentText
+    parent_id: int | None = None
+
+
+class CommentResponse(BaseModel):
+    id: int
+    user_id: int
+    movie_id: int
+    parent_id: int | None
+    text: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
