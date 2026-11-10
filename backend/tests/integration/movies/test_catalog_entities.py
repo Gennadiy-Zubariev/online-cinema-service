@@ -83,11 +83,13 @@ async def create_entity(
     return instance
 
 
-async def create_movie(db_session: AsyncSession, **relations: Any) -> Movie:
+async def create_movie(
+    db_session: AsyncSession, *, name: str = "Test Movie", **relations: Any
+) -> Movie:
     """Save a movie; `relations` sets certification/genres/stars/directors."""
     relations.setdefault("certification", Certification(name="PG-13"))
     movie = Movie(
-        name="Test Movie",
+        name=name,
         year=2020,
         time=120,
         imdb=7.5,
@@ -261,15 +263,15 @@ async def test_list_ordered_by_id(
     response = await client.get(entity.url)
 
     assert response.status_code == 200
-    assert response.json() == {
-        "items": [
-            {"id": first.id, "name": "Drama"},
-            {"id": second.id, "name": "Action"},
-        ],
-        "total": 2,
-        "page": 1,
-        "page_size": 20,
-    }
+    body = response.json()
+    # genres also have `movies_count` (tested below), so compare only id/name
+    assert [{"id": item["id"], "name": item["name"]} for item in body["items"]] == [
+        {"id": first.id, "name": "Drama"},
+        {"id": second.id, "name": "Action"},
+    ]
+    assert body["total"] == 2
+    assert body["page"] == 1
+    assert body["page_size"] == 20
 
 
 async def test_list_pagination(
@@ -311,6 +313,68 @@ async def test_list_invalid_pagination_returns_422(
     response = await client.get(entity.url, params=params)
 
     assert response.status_code == 422
+
+
+# --- genres: movie count ---
+
+
+async def test_list_genres_counts_movies(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    drama = await create_entity(db_session, Genre, "Drama")
+    comedy = await create_entity(db_session, Genre, "Comedy")
+    empty = await create_entity(db_session, Genre, "Western")
+    certification = await create_entity(db_session, Certification, "PG-13")
+    await create_movie(
+        db_session, name="Movie 1", certification=certification, genres=[drama, comedy]
+    )
+    await create_movie(
+        db_session, name="Movie 2", certification=certification, genres=[drama]
+    )
+
+    response = await client.get(GENRES.url)
+
+    assert response.status_code == 200
+    assert response.json()["items"] == [
+        {"id": drama.id, "name": "Drama", "movies_count": 2},
+        {"id": comedy.id, "name": "Comedy", "movies_count": 1},
+        {"id": empty.id, "name": "Western", "movies_count": 0},
+    ]
+    assert response.json()["total"] == 3
+
+
+async def test_list_genres_total_and_pagination_ignore_movie_links(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The JOIN with movies must not multiply genres in `items` or `total`."""
+    drama = await create_entity(db_session, Genre, "Drama")
+    comedy = await create_entity(db_session, Genre, "Comedy")
+    certification = await create_entity(db_session, Certification, "PG-13")
+    for i in range(3):
+        await create_movie(
+            db_session, name=f"Movie {i}", certification=certification, genres=[drama]
+        )
+
+    response = await client.get(GENRES.url, params={"page": 1, "page_size": 1})
+
+    body = response.json()
+    assert body["items"] == [{"id": drama.id, "name": "Drama", "movies_count": 3}]
+    assert body["total"] == 2
+
+    second = await client.get(GENRES.url, params={"page": 2, "page_size": 1})
+    assert second.json()["items"] == [
+        {"id": comedy.id, "name": "Comedy", "movies_count": 0}
+    ]
+
+
+async def test_genre_detail_has_no_movie_count(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    genre = await create_entity(db_session, Genre, "Drama")
+
+    response = await client.get(f"{GENRES.url}/{genre.id}")
+
+    assert response.json() == {"id": genre.id, "name": "Drama"}
 
 
 # --- detail ---
@@ -478,7 +542,8 @@ async def test_delete_unlinks_movies_and_keeps_them(
     link_column: str,
 ) -> None:
     instance = await create_entity(db_session, catalog.model, "Drama")
-    movie = await create_movie(db_session, **{relation: [instance]})
+    relations: dict[str, Any] = {relation: [instance]}
+    movie = await create_movie(db_session, **relations)
     movie_id, instance_id = movie.id, instance.id
     caller = await create_caller(create_user)
 

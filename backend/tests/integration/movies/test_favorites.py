@@ -307,3 +307,27 @@ async def test_list_favorites_invalid_query_returns_422(
     response = await client.get(FAVORITES_URL, params=params, headers=auth_header(user))
 
     assert response.status_code == 422
+
+
+async def test_list_favorites_filters_by_genre(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    catalog: Catalog,
+    favorites: list[Movie],
+) -> None:
+    """All fixture favorites are Drama; Gamma also becomes a Comedy here."""
+    gamma = await db_session.get(Movie, favorites[2].id, populate_existing=True)
+    assert gamma is not None
+    await db_session.refresh(gamma, ["genres"])
+    gamma.genres.append(catalog.genres[1])
+    await db_session.commit()
+
+    response = await client.get(
+        FAVORITES_URL,
+        params={"genre_id": catalog.genres[1].id},
+        headers=auth_header(user),
+    )
+
+    assert names(response.json()) == ["Gamma"]
+    assert response.json()["total"] == 1

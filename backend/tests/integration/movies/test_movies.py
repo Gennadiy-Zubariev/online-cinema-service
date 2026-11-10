@@ -1312,6 +1312,70 @@ async def test_list_total_counts_filtered_movies_not_page(
     assert response.json()["total"] == 2
 
 
+@pytest.fixture
+async def genre_movies(db_session: AsyncSession, catalog: Catalog) -> None:
+    """Drama: Heat, Up (Up is also a Comedy); Comedy: Up, Big; no genre: Plain."""
+    drama, comedy = catalog.genres
+    db_session.add_all(
+        Movie(
+            name=name,
+            year=year,
+            time=100,
+            imdb=7.0,
+            votes=votes,
+            description="Description.",
+            price=Decimal("5.00"),
+            certification=catalog.certification,
+            genres=genres,
+        )
+        for name, year, votes, genres in [
+            ("Heat", 1995, 700, [drama]),
+            ("Up", 2009, 900, [drama, comedy]),
+            ("Big", 1988, 300, [comedy]),
+            ("Plain", 2000, 100, []),
+        ]
+    )
+    await db_session.commit()
+
+
+@pytest.mark.parametrize(
+    ("genre", "params", "expected"),
+    [
+        (0, {}, ["Heat", "Up"]),
+        (1, {}, ["Up", "Big"]),
+        (0, {"sort_by": "votes", "order": "desc"}, ["Up", "Heat"]),
+        (1, {"year_from": 2000}, ["Up"]),
+    ],
+    ids=["drama", "comedy", "with_sorting", "with_year_filter"],
+)
+async def test_list_filters_by_genre(
+    client: AsyncClient,
+    catalog: Catalog,
+    genre_movies: None,
+    genre: int,
+    params: dict[str, Any],
+    expected: list[str],
+) -> None:
+    """A movie with several genres (Up) is listed once and counted once."""
+    genre_id = catalog.genres[genre].id
+
+    response = await client.get(MOVIES_URL, params={"genre_id": genre_id, **params})
+
+    assert response.status_code == 200
+    assert names(response.json()) == expected
+    assert response.json()["total"] == len(expected)
+
+
+async def test_list_filter_by_unknown_genre_is_empty(
+    client: AsyncClient, genre_movies: None
+) -> None:
+    response = await client.get(MOVIES_URL, params={"genre_id": UNKNOWN_ID})
+
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+    assert response.json()["total"] == 0
+
+
 @pytest.mark.parametrize(
     "params",
     [
@@ -1319,8 +1383,15 @@ async def test_list_total_counts_filtered_movies_not_page(
         {"year_to": "abc"},
         {"imdb_min": 10.1},
         {"imdb_max": -0.1},
+        {"genre_id": "abc"},
     ],
-    ids=["year_too_early", "year_not_int", "imdb_above_10", "imdb_negative"],
+    ids=[
+        "year_too_early",
+        "year_not_int",
+        "imdb_above_10",
+        "imdb_negative",
+        "genre_not_int",
+    ],
 )
 async def test_list_invalid_filter_returns_422(
     client: AsyncClient, params: dict[str, Any]
