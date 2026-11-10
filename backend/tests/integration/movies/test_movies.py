@@ -21,6 +21,8 @@ from src.movies.models import (
     Director,
     Genre,
     Movie,
+    MovieRating,
+    MovieReaction,
     Star,
     movie_directors,
     movie_genres,
@@ -1004,6 +1006,104 @@ async def test_get_movie_with_non_integer_id_returns_422(client: AsyncClient) ->
     response = await client.get(f"{MOVIES_URL}/abc")
 
     assert response.status_code == 422
+
+
+# --- detail: likes, dislikes, rating ---
+
+
+async def create_voter_ids(create_user: CreateUser, count: int) -> list[int]:
+    """Save `count` active users (voter0@..., voter1@...) and return their ids."""
+    users = [
+        await create_user(
+            email=f"voter{i}@example.com", is_active=True, token_expires_in=None
+        )
+        for i in range(count)
+    ]
+    return [user.id for user in users]
+
+
+async def test_get_movie_detail_without_reactions_and_ratings(
+    client: AsyncClient, movie: Movie
+) -> None:
+    response = await client.get(movie_url(movie.id))
+
+    body = response.json()
+    assert body["likes"] == 0
+    assert body["dislikes"] == 0
+    assert body["rating"] is None
+    assert body["ratings_count"] == 0
+
+
+async def test_get_movie_detail_counts_likes_and_dislikes(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    create_user: CreateUser,
+    movie: Movie,
+) -> None:
+    user_ids = await create_voter_ids(create_user, 3)
+    db_session.add_all(
+        MovieReaction(user_id=user_id, movie_id=movie.id, is_like=is_like)
+        for user_id, is_like in zip(user_ids, [True, True, False])
+    )
+    await db_session.commit()
+
+    response = await client.get(movie_url(movie.id))
+
+    body = response.json()
+    assert body["likes"] == 2
+    assert body["dislikes"] == 1
+
+
+@pytest.mark.parametrize(
+    ("scores", "expected_rating"),
+    [([10], 10.0), ([1, 2], 1.5), ([7, 8, 8], 7.7)],
+    ids=["single", "half", "rounded"],
+)
+async def test_get_movie_detail_averages_ratings(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    create_user: CreateUser,
+    movie: Movie,
+    scores: list[int],
+    expected_rating: float,
+) -> None:
+    user_ids = await create_voter_ids(create_user, len(scores))
+    db_session.add_all(
+        MovieRating(user_id=user_id, movie_id=movie.id, score=score)
+        for user_id, score in zip(user_ids, scores)
+    )
+    await db_session.commit()
+
+    response = await client.get(movie_url(movie.id))
+
+    body = response.json()
+    assert body["rating"] == expected_rating
+    assert body["ratings_count"] == len(scores)
+
+
+async def test_get_movie_detail_ignores_stats_of_other_movies(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    create_user: CreateUser,
+    catalog: Catalog,
+    movie: Movie,
+) -> None:
+    [other_movie] = await create_movies(db_session, catalog, 1)
+    [user_id] = await create_voter_ids(create_user, 1)
+    db_session.add_all(
+        [
+            MovieReaction(user_id=user_id, movie_id=other_movie.id, is_like=True),
+            MovieRating(user_id=user_id, movie_id=other_movie.id, score=9),
+        ]
+    )
+    await db_session.commit()
+
+    response = await client.get(movie_url(movie.id))
+
+    body = response.json()
+    assert body["likes"] == 0
+    assert body["rating"] is None
+    assert body["ratings_count"] == 0
 
 
 # --- list (public) ---
