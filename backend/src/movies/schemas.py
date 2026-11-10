@@ -172,6 +172,7 @@ class CommentResponse(BaseModel):
     parent_id: int | None
     text: str
     created_at: datetime
+    likes: int
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -62,3 +62,16 @@ async def delete_comment_like(db: AsyncSession, user_id: int, comment_id: int) -
         )
     )
     await db.commit()
+
+
+async def count_comment_likes(
+    db: AsyncSession, comment_ids: list[int]
+) -> dict[int, int]:
+    if not comment_ids:
+        return {}
+    result = await db.execute(
+        select(CommentLike.comment_id, func.count())
+        .where(CommentLike.comment_id.in_(comment_ids))
+        .group_by(CommentLike.comment_id)
+    )
+    return {comment_id: count for comment_id, count in result.all()}

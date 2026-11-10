@@ -8,6 +8,7 @@ from src.movies.comments_service import (
     list_comments,
     set_comment_like,
     delete_comment_like,
+    count_comment_likes,
 )
 from src.movies.models import MovieComment
 from src.movies.schemas import (
@@ -20,6 +21,30 @@ from src.movies.schemas import (
 router = APIRouter(tags=["movies"])
 
 
+def _to_comment_response(comment: MovieComment, likes: int) -> CommentResponse:
+    return CommentResponse(
+        id=comment.id,
+        user_id=comment.user_id,
+        movie_id=comment.movie_id,
+        parent_id=comment.parent_id,
+        text=comment.text,
+        created_at=comment.created_at,
+        likes=likes,
+    )
+
+
+def _to_comment_with_replies(
+    comment: MovieComment, likes: dict[int, int]
+) -> CommentWithRepliesResponse:
+    return CommentWithRepliesResponse(
+        **_to_comment_response(comment, likes.get(comment.id, 0)).model_dump(),
+        replies=[
+            _to_comment_response(reply, likes.get(reply.id, 0))
+            for reply in comment.replies
+        ],
+    )
+
+
 @router.post(
     "/movies/{movie_id}/comments",
     response_model=CommentResponse,
@@ -27,16 +52,17 @@ router = APIRouter(tags=["movies"])
 )
 async def add_comment(
     db: DbSession, current_user: CurrentUser, movie_id: int, data: CommentCreateRequest
-) -> MovieComment:
+) -> CommentResponse:
     """Comment on a movie, or reply to a comment of it (`parent_id`).
 
     Only one level of replies: replying to a reply returns 400.
     Returns 404 if the movie does not exist, or if `parent_id` does not
     exist or belongs to another movie.
     """
-    return await create_comment(
+    comment = await create_comment(
         db=db, user_id=current_user.id, movie_id=movie_id, data=data
     )
+    return _to_comment_response(comment, likes=0)
 
 
 @router.get(
@@ -57,8 +83,13 @@ async def get_comment_list(
     comments, total = await list_comments(
         db=db, movie_id=movie_id, page=pagination.page, page_size=pagination.page_size
     )
+    comment_ids = []
+    for comment in comments:
+        comment_ids.append(comment.id)
+        comment_ids.extend(reply.id for reply in comment.replies)
+    likes = await count_comment_likes(db=db, comment_ids=comment_ids)
     return CommentListResponse(
-        items=[CommentWithRepliesResponse.model_validate(c) for c in comments],
+        items=[_to_comment_with_replies(comment, likes) for comment in comments],
         total=total,
         page=pagination.page,
         page_size=pagination.page_size,
