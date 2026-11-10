@@ -76,7 +76,8 @@ async def get_comment_list(
     """List comments of a movie with their replies (public).
 
     Top-level comments are paginated, newest first: `page` starts at 1,
-    `page_size` is 1-100 (default 20); `total` counts top-level comments only.
+    `page_size` is 1-100 (default 20); `total` counts top-level comments only,
+    'likes' counts comments likes.
     Each comment has all its `replies`, oldest first.
     Returns 404 if the movie does not exist.
     """
