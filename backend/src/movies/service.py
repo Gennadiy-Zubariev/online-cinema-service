@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import TypeVar
 from uuid import uuid4
 
@@ -292,3 +293,36 @@ async def delete_movie_rating(db: AsyncSession, user_id: int, movie_id: int) -> 
         )
     )
     await db.commit()
+
+
+@dataclass(frozen=True)
+class MovieStats:
+    likes: int
+    dislikes: int
+    rating: float | None
+    ratings_count: int
+
+
+async def get_movie_stats(db: AsyncSession, movie_id: int) -> MovieStats:
+    reactions = (
+        await db.execute(
+            select(
+                func.count().filter(MovieReaction.is_like),
+                func.count().filter(MovieReaction.is_like.is_(False)),
+            ).where(MovieReaction.movie_id == movie_id)
+        )
+    ).one()
+    ratings = (
+        await db.execute(
+            select(func.avg(MovieRating.score), func.count()).where(
+                MovieRating.movie_id == movie_id
+            )
+        )
+    ).one()
+    average = ratings[0]
+    return MovieStats(
+        likes=reactions[0],
+        dislikes=reactions[1],
+        rating=round(float(average), 1) if average is not None else None,
+        ratings_count=ratings[1],
+    )

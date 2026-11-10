@@ -18,6 +18,7 @@ from src.movies.schemas import (
     MovieCatalogQuery,
     MovieReactionRequest,
     MovieRatingRequest,
+    MovieDetailResponse,
 )
 from src.movies.service import (
     create_named,
@@ -36,6 +37,7 @@ from src.movies.service import (
     delete_movie_reaction,
     set_movie_rating,
     delete_movie_rating,
+    get_movie_stats,
 )
 from src.storage.client import get_file_url
 
@@ -410,17 +412,25 @@ async def add_movie(db: DbSession, data: MovieCreateRequest) -> MovieResponse:
 
 @router.get(
     "/movies/{movie_id}",
-    response_model=MovieResponse,
+    response_model=MovieDetailResponse,
     status_code=status.HTTP_200_OK,
 )
-async def get_movie_detail(db: DbSession, movie_id: int) -> MovieResponse:
+async def get_movie_detail(db: DbSession, movie_id: int) -> MovieDetailResponse:
     """Get a movie with its certification, genres, directors and stars (public).
 
     `poster_url` is a temporary link (valid for 1 hour) or null.
+    `rating` is the average score (1 decimal) or null if nobody rated it.
     Returns 404 if the movie does not exist.
     """
     movie = await get_movie(db=db, movie_id=movie_id)
-    return _to_movie_response(movie)
+    stats = await get_movie_stats(db=db, movie_id=movie_id)
+    return MovieDetailResponse(
+        **_to_movie_response(movie).model_dump(),
+        likes=stats.likes,
+        dislikes=stats.dislikes,
+        rating=stats.rating,
+        ratings_count=stats.ratings_count,
+    )
 
 
 def _to_movie_list_item(movie: Movie) -> MovieListItemResponse:

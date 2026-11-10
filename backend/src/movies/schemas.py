@@ -111,6 +111,13 @@ class MovieResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class MovieDetailResponse(MovieResponse):
+    likes: int
+    dislikes: int
+    rating: float | None
+    ratings_count: int
+
+
 class MovieListItemResponse(BaseModel):
     id: int
     uuid: UUID
