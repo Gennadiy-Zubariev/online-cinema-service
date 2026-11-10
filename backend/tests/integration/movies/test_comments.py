@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.accounts.models import User, UserGroupEnum
-from src.movies.models import Movie, MovieComment
+from src.movies.models import CommentLike, Movie, MovieComment
 from tests.integration.conftest import CreateUser
 from tests.integration.movies.conftest import (
     UNKNOWN_ID,
@@ -110,6 +110,7 @@ async def test_create_comment(
     assert body["parent_id"] is None
     assert body["text"] == "Great movie!"
     assert body["created_at"] is not None
+    assert body["likes"] == 0
 
     [stored] = await stored_comments(db_session)
     assert stored.id == body["id"]
@@ -399,6 +400,53 @@ async def test_list_comments_pagination(
     assert body["total"] == 3
     assert body["page"] == page
     assert body["page_size"] == 2
+
+
+async def test_list_comments_counts_likes_of_comments_and_replies(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    create_user: CreateUser,
+    user: User,
+    movie: Movie,
+    comment: MovieComment,
+) -> None:
+    other_user = await create_user(
+        email="other@example.com", is_active=True, token_expires_in=None
+    )
+    liked_reply = await save_comment(db_session, user, movie, "Agree!", comment)
+    await save_comment(db_session, user, movie, "Me too!", comment)
+    db_session.add_all(
+        [
+            CommentLike(user_id=user.id, comment_id=comment.id),
+            CommentLike(user_id=other_user.id, comment_id=comment.id),
+            CommentLike(user_id=other_user.id, comment_id=liked_reply.id),
+        ]
+    )
+    await db_session.commit()
+
+    response = await client.get(comments_url(movie.id))
+
+    [item] = response.json()["items"]
+    assert item["likes"] == 2
+    assert [reply["likes"] for reply in item["replies"]] == [1, 0]
+
+
+async def test_list_comments_ignores_likes_of_other_comments(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    movie: Movie,
+    other_movie: Movie,
+    comment: MovieComment,
+) -> None:
+    other_comment = await save_comment(db_session, user, other_movie, "Other")
+    db_session.add(CommentLike(user_id=user.id, comment_id=other_comment.id))
+    await db_session.commit()
+
+    response = await client.get(comments_url(movie.id))
+
+    [item] = response.json()["items"]
+    assert item["likes"] == 0
 
 
 async def test_list_comments_loads_replies_in_fresh_session(
