@@ -1,30 +1,13 @@
-from dataclasses import dataclass
-from typing import TypeVar
 from uuid import uuid4
 
-from psycopg.errors import UniqueViolation, ForeignKeyViolation
-from sqlalchemy import select, func, or_, delete
-from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 from starlette.concurrency import run_in_threadpool
 
-from src.database.base import Base
-from src.movies.exceptions import (
-    EntityAlreadyExistsError,
-    EntityNotFoundError,
-    EntityInUseError,
-)
-from src.movies.models import (
-    Genre,
-    Star,
-    Director,
-    Certification,
-    Movie,
-    MovieReaction,
-    MovieRating,
-)
+from src.movies.entities_service import NamedModel, commit_unique, get_named
+from src.movies.exceptions import EntityNotFoundError
+from src.movies.models import Genre, Star, Director, Certification, Movie
 from src.movies.schemas import (
     MovieCreateRequest,
     MovieUpdateRequest,
@@ -33,7 +16,6 @@ from src.movies.schemas import (
 from src.storage.client import upload_file, delete_file
 from src.storage.images import validate_image
 
-NamedModel = TypeVar("NamedModel", Genre, Star, Director, Certification)
 RELATION_ID_FIELDS = {"certification_id", "genre_ids", "director_ids", "star_ids"}
 MAX_POSTER_SIZE = 5 * 1024 * 1024  # 5 MB
 SORT_COLUMNS = {
@@ -42,16 +24,6 @@ SORT_COLUMNS = {
     "year": Movie.year,
     "votes": Movie.votes,
 }
-
-
-async def _commit_unique(db: AsyncSession, model: type[Base]) -> None:
-    try:
-        await db.commit()
-    except IntegrityError as error:
-        await db.rollback()
-        if isinstance(error.orig, UniqueViolation):
-            raise EntityAlreadyExistsError(model.__name__) from error
-        raise
 
 
 async def _get_named_by_ids(
@@ -64,57 +36,6 @@ async def _get_named_by_ids(
     if len(entities) != len(ids):
         raise EntityNotFoundError(model.__name__)
     return entities
-
-
-async def create_named(
-    db: AsyncSession, model: type[NamedModel], name: str
-) -> NamedModel:
-    entity = model(name=name)
-    db.add(entity)
-    await _commit_unique(db=db, model=model)
-    return entity
-
-
-async def list_named(
-    db: AsyncSession, model: type[NamedModel], page: int, page_size: int
-) -> tuple[list[NamedModel], int]:
-    total = await db.scalar(select(func.count()).select_from(model))
-    result = await db.scalars(
-        select(model).order_by(model.id).offset((page - 1) * page_size).limit(page_size)
-    )
-    return list(result.all()), total or 0
-
-
-async def get_named(
-    db: AsyncSession, model: type[NamedModel], entity_id: int
-) -> NamedModel:
-    entity = await db.get(model, entity_id)
-    if entity is None:
-        raise EntityNotFoundError(model.__name__)
-    return entity
-
-
-async def update_named(
-    db: AsyncSession, model: type[NamedModel], entity_id: int, name: str
-) -> NamedModel:
-    entity = await get_named(db=db, model=model, entity_id=entity_id)
-    entity.name = name
-    await _commit_unique(db=db, model=model)
-    return entity
-
-
-async def delete_named(
-    db: AsyncSession, model: type[NamedModel], entity_id: int
-) -> None:
-    entity = await get_named(db=db, model=model, entity_id=entity_id)
-    await db.delete(entity)
-    try:
-        await db.commit()
-    except IntegrityError as error:
-        await db.rollback()
-        if isinstance(error.orig, ForeignKeyViolation):
-            raise EntityInUseError(model.__name__) from error
-        raise
 
 
 async def create_movie(
@@ -135,7 +56,7 @@ async def create_movie(
         stars=stars,
     )
     db.add(movie)
-    await _commit_unique(db=db, model=Movie)
+    await commit_unique(db=db, model=Movie)
     return movie
 
 
@@ -213,7 +134,7 @@ async def update_movie(
     ).items():
         setattr(movie, field, value)
 
-    await _commit_unique(db=db, model=Movie)
+    await commit_unique(db=db, model=Movie)
     return movie
 
 
@@ -243,86 +164,3 @@ async def update_movie_poster(
     if old_key is not None:
         await run_in_threadpool(delete_file, old_key)
     return movie
-
-
-async def set_movie_reaction(
-    db: AsyncSession, user_id: int, movie_id: int, is_like: bool
-) -> None:
-    if await db.get(Movie, movie_id) is None:
-        raise EntityNotFoundError(Movie.__name__)
-
-    stmt = insert(MovieReaction).values(
-        user_id=user_id, movie_id=movie_id, is_like=is_like
-    )
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["user_id", "movie_id"],
-        set_={"is_like": is_like},
-    )
-    await db.execute(stmt)
-    await db.commit()
-
-
-async def delete_movie_reaction(db: AsyncSession, user_id: int, movie_id: int) -> None:
-    await db.execute(
-        delete(MovieReaction).where(
-            MovieReaction.user_id == user_id, MovieReaction.movie_id == movie_id
-        )
-    )
-    await db.commit()
-
-
-async def set_movie_rating(
-    db: AsyncSession, user_id: int, movie_id: int, score: int
-) -> None:
-    if await db.get(Movie, movie_id) is None:
-        raise EntityNotFoundError(Movie.__name__)
-
-    stmt = insert(MovieRating).values(user_id=user_id, movie_id=movie_id, score=score)
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["user_id", "movie_id"],
-        set_={"score": score},
-    )
-    await db.execute(stmt)
-    await db.commit()
-
-
-async def delete_movie_rating(db: AsyncSession, user_id: int, movie_id: int) -> None:
-    await db.execute(
-        delete(MovieRating).where(
-            MovieRating.user_id == user_id, MovieRating.movie_id == movie_id
-        )
-    )
-    await db.commit()
-
-
-@dataclass(frozen=True)
-class MovieStats:
-    likes: int
-    dislikes: int
-    rating: float | None
-    ratings_count: int
-
-
-async def get_movie_stats(db: AsyncSession, movie_id: int) -> MovieStats:
-    reactions = (
-        await db.execute(
-            select(
-                func.count().filter(MovieReaction.is_like),
-                func.count().filter(MovieReaction.is_like.is_(False)),
-            ).where(MovieReaction.movie_id == movie_id)
-        )
-    ).one()
-    ratings = (
-        await db.execute(
-            select(func.avg(MovieRating.score), func.count()).where(
-                MovieRating.movie_id == movie_id
-            )
-        )
-    ).one()
-    average = ratings[0]
-    return MovieStats(
-        likes=reactions[0],
-        dislikes=reactions[1],
-        rating=round(float(average), 1) if average is not None else None,
-        ratings_count=ratings[1],
-    )

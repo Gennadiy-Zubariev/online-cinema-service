@@ -42,7 +42,9 @@ from src.movies.exceptions import (
     EntityAlreadyExistsError,
     EntityInUseError,
 )
-from src.movies.router import router as movies_router
+from src.movies.entities_router import router as movie_entities_router
+from src.movies.reactions_router import router as movie_reactions_router
+from src.movies.movies_router import router as movies_router
 from src.storage.client import ensure_bucket_exists
 from src.storage.exception_handlers import (
     unsupported_image_type_handler,
@@ -91,4 +93,6 @@ async def health() -> dict[str, str]:
 
 # routers
 app.include_router(accounts_router, prefix=API_PREFIX)
+app.include_router(movie_entities_router, prefix=API_PREFIX)
 app.include_router(movies_router, prefix=API_PREFIX)
+app.include_router(movie_reactions_router, prefix=API_PREFIX)

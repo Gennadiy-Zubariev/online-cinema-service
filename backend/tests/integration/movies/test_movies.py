@@ -28,7 +28,7 @@ from src.movies.models import (
     movie_genres,
     movie_stars,
 )
-from src.movies.service import MAX_POSTER_SIZE
+from src.movies.movies_service import MAX_POSTER_SIZE
 from tests.integration.conftest import CreateUser
 from tests.integration.movies.conftest import (
     MOVIES_URL,
@@ -730,7 +730,7 @@ def storage_mock(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
     """Replace S3 calls where the service uses them, so tests need no MinIO."""
     mocks = {"upload_file": MagicMock(), "delete_file": MagicMock()}
     for name, mock in mocks.items():
-        monkeypatch.setattr(f"src.movies.service.{name}", mock)
+        monkeypatch.setattr(f"src.movies.movies_service.{name}", mock)
     return mocks
 
 
