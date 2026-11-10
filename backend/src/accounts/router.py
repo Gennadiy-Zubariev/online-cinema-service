@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Response, status, Cookie, Depends, Query, UploadFile
+from fastapi import APIRouter, Response, status, Cookie, Depends, UploadFile
 
 from src.accounts.dependencies import CurrentUser, get_current_admin
 from src.accounts.exceptions import InvalidRefreshTokenError
@@ -40,6 +40,7 @@ from src.accounts.service import (
     update_user_avatar,
     MAX_AVATAR_SIZE,
 )
+from src.common.pagination import Pagination
 from src.config.settings import SettingsDep
 from src.database.session import DbSession
 from src.storage.client import get_file_url
@@ -237,7 +238,7 @@ async def password_reset_complete(
     dependencies=[Depends(get_current_admin)],
 )
 async def update_user_group(
-    user_id: int, data: UserGroupUpdateRequest, db: DbSession
+    db: DbSession, user_id: int, data: UserGroupUpdateRequest
 ) -> MessageResponse:
     """Change a user's group (admin only).
 
@@ -253,7 +254,7 @@ async def update_user_group(
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(get_current_admin)],
 )
-async def activate_user(user_id: int, db: DbSession) -> MessageResponse:
+async def activate_user(db: DbSession, user_id: int) -> MessageResponse:
     """Manually activate a user's account (admin only).
 
     Removes the pending activation token. Already active users
@@ -269,18 +270,16 @@ async def activate_user(user_id: int, db: DbSession) -> MessageResponse:
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(get_current_admin)],
 )
-async def list_all_users(
-    db: DbSession,
-    page: Annotated[int, Query(ge=1)] = 1,
-    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
-) -> UserListResponse:
+async def list_all_users(db: DbSession, pagination: Pagination) -> UserListResponse:
     """List all users with their groups, ordered by id (admin only)."""
-    users, total = await list_users(db=db, page=page, page_size=page_size)
+    users, total = await list_users(
+        db=db, page=pagination.page, page_size=pagination.page_size
+    )
     return UserListResponse(
         items=[UserAdminResponse.model_validate(user) for user in users],
         total=total,
-        page=page,
-        page_size=page_size,
+        page=pagination.page,
+        page_size=pagination.page_size,
     )
 
 
@@ -317,7 +316,7 @@ async def get_profile(db: DbSession, current_user: CurrentUser) -> ProfileRespon
     status_code=status.HTTP_200_OK,
 )
 async def update_profile(
-    data: ProfileUpdateRequest, db: DbSession, current_user: CurrentUser
+    db: DbSession, current_user: CurrentUser, data: ProfileUpdateRequest
 ) -> ProfileResponse:
     """Partially update the current user's profile.
 

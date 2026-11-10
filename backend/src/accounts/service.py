@@ -18,8 +18,6 @@ from src.accounts.exceptions import (
     IncorrectPasswordError,
     InvalidPasswordResetTokenError,
     UserNotFoundError,
-    UnsupportedAvatarTypeError,
-    AvatarTooLargeError,
 )
 from src.accounts.models import (
     ActivationToken,
@@ -50,7 +48,10 @@ from src.accounts.security import (
 )
 from src.config.settings import Settings
 from src.storage.client import upload_file, delete_file
+from src.storage.images import validate_image
 from src.tasks.emails import send_activation_email, send_password_reset_email
+
+MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2 MB
 
 
 async def register_user(
@@ -82,7 +83,7 @@ async def register_user(
         await db.rollback()
         if isinstance(error.orig, UniqueViolation):
             raise UserAlreadyExistsError(data.email) from error
-        raise  # not an email conflict — propagate as 500
+        raise
 
     send_activation_email.delay(user.email, raw_token)
     return user
@@ -303,17 +304,10 @@ async def update_user_profile(
     return profile
 
 
-AVATAR_EXTENSIONS = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
-MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2 MB
-
-
 async def update_user_avatar(
     db: AsyncSession, user_id: int, data: bytes, content_type: str | None
 ) -> UserProfile:
-    if content_type not in AVATAR_EXTENSIONS:
-        raise UnsupportedAvatarTypeError()
-    if len(data) > MAX_AVATAR_SIZE:
-        raise AvatarTooLargeError()
+    content_type, extension = validate_image(data, content_type, MAX_AVATAR_SIZE)
 
     profile = await get_user_profile(db=db, user_id=user_id)
     if profile is None:
@@ -321,7 +315,7 @@ async def update_user_avatar(
         db.add(profile)
 
     old_key = profile.avatar
-    new_key = f"avatars/{user_id}/{uuid4().hex}.{AVATAR_EXTENSIONS[content_type]}"
+    new_key = f"avatars/{user_id}/{uuid4().hex}.{extension}"
     await run_in_threadpool(upload_file, new_key, data, content_type)
     profile.avatar = new_key
     await db.commit()

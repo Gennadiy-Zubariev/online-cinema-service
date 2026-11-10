@@ -1,0 +1,333 @@
+"""Favorite movies of the current user (any logged-in user)."""
+
+from datetime import UTC, datetime
+from decimal import Decimal
+from typing import Any
+
+import pytest
+from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.accounts.models import User, UserGroupEnum
+from src.movies.models import FavoriteMovie, Movie
+from tests.integration.conftest import CreateUser
+from tests.integration.movies.conftest import (
+    UNKNOWN_ID,
+    Catalog,
+    auth_header,
+    create_caller,
+    movie_url,
+)
+
+
+def favorite_url(movie_id: int) -> str:
+    return f"{movie_url(movie_id)}/favorite"
+
+
+async def stored_favorites(db_session: AsyncSession) -> set[tuple[int, int]]:
+    """{(user_id, movie_id)} of all favorites, read from the DB."""
+    result = await db_session.execute(
+        select(FavoriteMovie.user_id, FavoriteMovie.movie_id)
+    )
+    return {(user_id, movie_id) for user_id, movie_id in result.all()}
+
+
+@pytest.fixture
+async def user(create_user: CreateUser) -> User:
+    return await create_caller(create_user, group=UserGroupEnum.USER)
+
+
+@pytest.fixture
+async def other_user(create_user: CreateUser) -> User:
+    return await create_user(
+        email="other@example.com", is_active=True, token_expires_in=None
+    )
+
+
+# --- access control ---
+
+
+@pytest.mark.parametrize("method", ["PUT", "DELETE"])
+async def test_favorite_requires_token(
+    client: AsyncClient, movie: Movie, method: str
+) -> None:
+    response = await client.request(method, favorite_url(movie.id))
+
+    assert response.status_code == 401
+
+
+# --- put ---
+
+
+async def test_put_favorite(
+    client: AsyncClient, db_session: AsyncSession, user: User, movie: Movie
+) -> None:
+    response = await client.put(favorite_url(movie.id), headers=auth_header(user))
+
+    assert response.status_code == 204
+    assert await stored_favorites(db_session) == {(user.id, movie.id)}
+
+
+async def test_put_favorite_sets_added_at(
+    client: AsyncClient, db_session: AsyncSession, user: User, movie: Movie
+) -> None:
+    await client.put(favorite_url(movie.id), headers=auth_header(user))
+
+    added_at = await db_session.scalar(select(FavoriteMovie.added_at))
+    assert added_at is not None
+
+
+async def test_put_favorite_twice_keeps_one_row_and_added_at(
+    client: AsyncClient, db_session: AsyncSession, user: User, movie: Movie
+) -> None:
+    """`added_at` is set explicitly: inside the test transaction `now()` never
+    changes, so a second PUT that overwrote it would go unnoticed otherwise."""
+    added_at = datetime(2020, 1, 1, tzinfo=UTC)
+    db_session.add(FavoriteMovie(user_id=user.id, movie_id=movie.id, added_at=added_at))
+    await db_session.commit()
+
+    response = await client.put(favorite_url(movie.id), headers=auth_header(user))
+
+    assert response.status_code == 204
+    assert await stored_favorites(db_session) == {(user.id, movie.id)}
+    assert await db_session.scalar(select(FavoriteMovie.added_at)) == added_at
+
+
+async def test_movie_can_be_favorite_of_many_users(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    other_user: User,
+    movie: Movie,
+) -> None:
+    for caller in [user, other_user]:
+        await client.put(favorite_url(movie.id), headers=auth_header(caller))
+
+    assert await stored_favorites(db_session) == {
+        (user.id, movie.id),
+        (other_user.id, movie.id),
+    }
+
+
+async def test_put_favorite_of_unknown_movie_returns_404(
+    client: AsyncClient, db_session: AsyncSession, user: User
+) -> None:
+    response = await client.put(favorite_url(UNKNOWN_ID), headers=auth_header(user))
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Movie not found."}
+    assert await stored_favorites(db_session) == set()
+
+
+@pytest.mark.parametrize("method", ["PUT", "DELETE"])
+async def test_favorite_with_non_integer_id_returns_422(
+    client: AsyncClient, user: User, method: str
+) -> None:
+    response = await client.request(
+        method, "/api/v1/movies/abc/favorite", headers=auth_header(user)
+    )
+
+    assert response.status_code == 422
+
+
+# --- delete ---
+
+
+async def test_delete_favorite_removes_only_own(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    other_user: User,
+    movie: Movie,
+) -> None:
+    db_session.add_all(
+        [
+            FavoriteMovie(user_id=user.id, movie_id=movie.id),
+            FavoriteMovie(user_id=other_user.id, movie_id=movie.id),
+        ]
+    )
+    await db_session.commit()
+
+    response = await client.delete(favorite_url(movie.id), headers=auth_header(user))
+
+    assert response.status_code == 204
+    assert await stored_favorites(db_session) == {(other_user.id, movie.id)}
+
+
+async def test_delete_favorite_not_in_favorites_returns_204(
+    client: AsyncClient, user: User, movie: Movie
+) -> None:
+    response = await client.delete(favorite_url(movie.id), headers=auth_header(user))
+
+    assert response.status_code == 204
+
+
+async def test_delete_favorite_of_unknown_movie_returns_204(
+    client: AsyncClient, user: User
+) -> None:
+    response = await client.delete(favorite_url(UNKNOWN_ID), headers=auth_header(user))
+
+    assert response.status_code == 204
+
+
+# --- list ---
+
+FAVORITES_URL = "/api/v1/favorites"
+
+
+def names(response_json: dict[str, Any]) -> list[str]:
+    return [item["name"] for item in response_json["items"]]
+
+
+@pytest.fixture
+async def favorites(
+    db_session: AsyncSession, catalog: Catalog, user: User, other_user: User
+) -> list[Movie]:
+    """Alpha, Beta, Gamma are favorites of `user`; Delta - only of `other_user`."""
+    movies = [
+        Movie(
+            name=name,
+            year=year,
+            time=100,
+            imdb=imdb,
+            votes=1000,
+            description=description,
+            price=Decimal(price),
+            certification=catalog.certification,
+            genres=[catalog.genres[0]],
+        )
+        for name, year, imdb, price, description in [
+            ("Alpha", 2001, 7.0, "5.00", "A heist."),
+            ("Beta", 2005, 8.0, "9.00", "A space heist."),
+            ("Gamma", 2010, 9.0, "3.00", "A love story."),
+            ("Delta", 2008, 9.5, "4.00", "A heist in Paris."),
+        ]
+    ]
+    db_session.add_all(movies)
+    await db_session.commit()
+    db_session.add_all(
+        [FavoriteMovie(user_id=user.id, movie_id=m.id) for m in movies[:3]]
+        + [FavoriteMovie(user_id=other_user.id, movie_id=movies[3].id)]
+    )
+    await db_session.commit()
+    return movies
+
+
+async def test_list_favorites_requires_token(client: AsyncClient) -> None:
+    response = await client.get(FAVORITES_URL)
+
+    assert response.status_code == 401
+
+
+async def test_list_favorites_empty(
+    client: AsyncClient, user: User, movie: Movie
+) -> None:
+    """A movie in the catalog that nobody added to favorites is not listed."""
+    response = await client.get(FAVORITES_URL, headers=auth_header(user))
+
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "total": 0, "page": 1, "page_size": 20}
+
+
+async def test_list_favorites_returns_only_own_movies_as_short_items(
+    client: AsyncClient, user: User, catalog: Catalog, favorites: list[Movie]
+) -> None:
+    response = await client.get(FAVORITES_URL, headers=auth_header(user))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert names(body) == ["Alpha", "Beta", "Gamma"]
+    assert body["total"] == 3
+    item = body["items"][0]
+    assert item["id"] == favorites[0].id
+    assert item["price"] == "5.00"
+    assert item["genres"] == [{"id": catalog.genres[0].id, "name": "Drama"}]
+    assert item["poster_url"] is None
+    assert "description" not in item
+
+
+async def test_list_favorites_of_other_user(
+    client: AsyncClient, other_user: User, favorites: list[Movie]
+) -> None:
+    response = await client.get(FAVORITES_URL, headers=auth_header(other_user))
+
+    assert names(response.json()) == ["Delta"]
+
+
+@pytest.mark.parametrize(
+    ("params", "expected"),
+    [
+        ({"year_from": 2005}, ["Beta", "Gamma"]),
+        ({"imdb_max": 8.0}, ["Alpha", "Beta"]),
+        ({"search": "heist"}, ["Alpha", "Beta"]),
+        ({"sort_by": "price", "order": "desc"}, ["Beta", "Alpha", "Gamma"]),
+        ({"search": "heist", "sort_by": "year", "order": "desc"}, ["Beta", "Alpha"]),
+    ],
+    ids=["filter_year", "filter_imdb", "search", "sort", "search_and_sort"],
+)
+async def test_list_favorites_applies_catalog_query(
+    client: AsyncClient,
+    user: User,
+    favorites: list[Movie],
+    params: dict[str, Any],
+    expected: list[str],
+) -> None:
+    """Same query as the catalog; Delta matches search and filters but is not
+    a favorite of `user`, so it never appears."""
+    response = await client.get(FAVORITES_URL, params=params, headers=auth_header(user))
+
+    assert response.status_code == 200
+    assert names(response.json()) == expected
+    assert response.json()["total"] == len(expected)
+
+
+async def test_list_favorites_pagination(
+    client: AsyncClient, user: User, favorites: list[Movie]
+) -> None:
+    response = await client.get(
+        FAVORITES_URL, params={"page": 2, "page_size": 2}, headers=auth_header(user)
+    )
+
+    body = response.json()
+    assert names(body) == ["Gamma"]
+    assert body["total"] == 3
+    assert body["page"] == 2
+    assert body["page_size"] == 2
+
+
+@pytest.mark.parametrize(
+    "params",
+    [{"page": 0}, {"page_size": 101}, {"sort_by": "name"}, {"year_from": 1800}],
+    ids=["page_zero", "page_size_too_big", "unknown_sort", "year_too_small"],
+)
+async def test_list_favorites_invalid_query_returns_422(
+    client: AsyncClient, user: User, params: dict[str, Any]
+) -> None:
+    response = await client.get(FAVORITES_URL, params=params, headers=auth_header(user))
+
+    assert response.status_code == 422
+
+
+async def test_list_favorites_filters_by_genre(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    catalog: Catalog,
+    favorites: list[Movie],
+) -> None:
+    """All fixture favorites are Drama; Gamma also becomes a Comedy here."""
+    gamma = await db_session.get(Movie, favorites[2].id, populate_existing=True)
+    assert gamma is not None
+    await db_session.refresh(gamma, ["genres"])
+    gamma.genres.append(catalog.genres[1])
+    await db_session.commit()
+
+    response = await client.get(
+        FAVORITES_URL,
+        params={"genre_id": catalog.genres[1].id},
+        headers=auth_header(user),
+    )
+
+    assert names(response.json()) == ["Gamma"]
+    assert response.json()["total"] == 1

@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.accounts.models import ActivationToken
-from tests.integration.accounts.conftest import RAW_ACTIVATION_TOKEN, CreateUser
+from tests.integration.conftest import RAW_ACTIVATION_TOKEN, CreateUser
 
 ACTIVATION_URL = "/api/v1/accounts/activation"
 

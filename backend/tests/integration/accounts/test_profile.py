@@ -9,7 +9,7 @@ from src.accounts.models import User, UserProfile
 from src.accounts.security import create_access_token
 from src.accounts.service import MAX_AVATAR_SIZE
 from src.config.settings import get_settings
-from tests.integration.accounts.conftest import CreateUser
+from tests.integration.conftest import CreateUser
 
 PROFILE_URL = "/api/v1/accounts/profile"
 AVATAR_URL = "/api/v1/accounts/profile/avatar"
@@ -236,7 +236,7 @@ async def test_upload_avatar_rejects_unsupported_type(
     )
 
     assert response.status_code == 415
-    assert response.json() == {"detail": "Avatar must be a JPEG, PNG or WebP image."}
+    assert response.json() == {"detail": "Image must be a JPEG, PNG or WebP image."}
     storage_mock["upload_file"].assert_not_called()
 
 
@@ -254,6 +254,7 @@ async def test_upload_avatar_rejects_too_large_file(
     )
 
     assert response.status_code == 413
+    assert response.json() == {"detail": "Image must not exceed 2 MB."}
     storage_mock["upload_file"].assert_not_called()
 
 
