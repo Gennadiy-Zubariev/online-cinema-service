@@ -1,4 +1,6 @@
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.movies.exceptions import EntityNotFoundError, NestedReplyError
 from src.movies.models import Movie, MovieComment
@@ -22,3 +24,21 @@ async def create_comment(
     db.add(comment)
     await db.commit()
     return comment
+
+
+async def list_comments(
+    db: AsyncSession, movie_id: int, page: int, page_size: int
+) -> tuple[list[MovieComment], int]:
+    if await db.get(Movie, movie_id) is None:
+        raise EntityNotFoundError(Movie.__name__)
+    stmt = select(MovieComment).where(
+        MovieComment.movie_id == movie_id, MovieComment.parent_id.is_(None)
+    )
+    total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
+    result = await db.scalars(
+        stmt.options(selectinload(MovieComment.replies))
+        .order_by(MovieComment.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    return list(result.all()), total or 0

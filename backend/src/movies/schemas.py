@@ -174,3 +174,14 @@ class CommentResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CommentWithRepliesResponse(CommentResponse):
+    replies: list[CommentResponse]
+
+
+class CommentListResponse(BaseModel):
+    items: list[CommentWithRepliesResponse]
+    total: int
+    page: int
+    page_size: int

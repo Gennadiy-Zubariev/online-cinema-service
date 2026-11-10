@@ -176,6 +176,8 @@ class MovieComment(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
+    replies: Mapped[list["MovieComment"]] = relationship(order_by="MovieComment.id")
+
 
 class CommentLike(Base):
     __tablename__ = "comment_likes"
