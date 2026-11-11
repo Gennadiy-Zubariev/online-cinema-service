@@ -72,8 +72,11 @@ async def other_movie(db_session: AsyncSession, catalog: Catalog) -> Movie:
 # --- access control ---
 
 
-async def test_add_requires_token(client: AsyncClient, movie: Movie) -> None:
-    response = await client.put(cart_item_url(movie.id))
+@pytest.mark.parametrize("method", ["PUT", "DELETE"])
+async def test_cart_item_requires_token(
+    client: AsyncClient, movie: Movie, method: str
+) -> None:
+    response = await client.request(method, cart_item_url(movie.id))
 
     assert response.status_code == 401
 
@@ -157,9 +160,91 @@ async def test_add_unknown_movie_returns_404(
     assert await count_carts(db_session) == 0
 
 
-async def test_add_invalid_movie_id_returns_422(
-    client: AsyncClient, user: User
+@pytest.mark.parametrize("method", ["PUT", "DELETE"])
+async def test_cart_item_with_non_integer_id_returns_422(
+    client: AsyncClient, user: User, method: str
 ) -> None:
-    response = await client.put(f"{CART_ITEMS_URL}/abc", headers=auth_header(user))
+    response = await client.request(
+        method, f"{CART_ITEMS_URL}/abc", headers=auth_header(user)
+    )
 
     assert response.status_code == 422
+
+
+# --- remove ---
+
+
+async def test_remove_movie(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    movie: Movie,
+    other_movie: Movie,
+) -> None:
+    await client.put(cart_item_url(movie.id), headers=auth_header(user))
+    await client.put(cart_item_url(other_movie.id), headers=auth_header(user))
+
+    response = await client.delete(cart_item_url(movie.id), headers=auth_header(user))
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert await stored_cart_items(db_session) == {(user.id, other_movie.id)}
+
+
+async def test_remove_last_movie_keeps_empty_cart(
+    client: AsyncClient, db_session: AsyncSession, user: User, movie: Movie
+) -> None:
+    await client.put(cart_item_url(movie.id), headers=auth_header(user))
+
+    await client.delete(cart_item_url(movie.id), headers=auth_header(user))
+
+    assert await stored_cart_items(db_session) == set()
+    assert await count_carts(db_session) == 1
+
+
+async def test_remove_only_from_own_cart(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    other_user: User,
+    movie: Movie,
+) -> None:
+    await client.put(cart_item_url(movie.id), headers=auth_header(user))
+    await client.put(cart_item_url(movie.id), headers=auth_header(other_user))
+
+    await client.delete(cart_item_url(movie.id), headers=auth_header(user))
+
+    assert await stored_cart_items(db_session) == {(other_user.id, movie.id)}
+
+
+async def test_remove_movie_not_in_cart_is_idempotent(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    movie: Movie,
+    other_movie: Movie,
+) -> None:
+    await client.put(cart_item_url(movie.id), headers=auth_header(user))
+
+    response = await client.delete(
+        cart_item_url(other_movie.id), headers=auth_header(user)
+    )
+
+    assert response.status_code == 204
+    assert await stored_cart_items(db_session) == {(user.id, movie.id)}
+
+
+@pytest.mark.parametrize("known_movie", [True, False], ids=["movie", "unknown_movie"])
+async def test_remove_without_cart_does_not_create_it(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    movie: Movie,
+    known_movie: bool,
+) -> None:
+    movie_id = movie.id if known_movie else UNKNOWN_ID
+
+    response = await client.delete(cart_item_url(movie_id), headers=auth_header(user))
+
+    assert response.status_code == 204
+    assert await count_carts(db_session) == 0
