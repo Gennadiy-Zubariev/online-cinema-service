@@ -9,13 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.accounts.models import User, UserGroupEnum
 from src.movies.models import Movie, MovieReaction
-from tests.integration.conftest import CreateUser
-from tests.integration.movies.conftest import (
+from tests.integration.conftest import (
     UNKNOWN_ID,
+    CreateUser,
     auth_header,
     create_caller,
-    movie_url,
 )
+from tests.integration.movies.conftest import movie_url
 
 
 def reaction_url(movie_id: int) -> str:

@@ -29,16 +29,14 @@ from src.movies.models import (
     movie_stars,
 )
 from src.movies.movies_service import MAX_POSTER_SIZE
-from tests.integration.conftest import CreateUser
-from tests.integration.movies.conftest import (
-    MOVIES_URL,
-    PERMISSION_DENIED,
+from tests.integration.conftest import (
     UNKNOWN_ID,
     Catalog,
+    CreateUser,
     auth_header,
     create_caller,
-    movie_url,
 )
+from tests.integration.movies.conftest import MOVIES_URL, PERMISSION_DENIED, movie_url
 
 
 def movie_payload(catalog: Catalog, **overrides: Any) -> dict[str, Any]:
