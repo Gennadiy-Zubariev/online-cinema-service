@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,5 +32,15 @@ async def add_movie_to_cart(
         insert(CartItem)
         .values(cart_id=cart.id, movie_id=movie_id)
         .on_conflict_do_nothing(index_elements=["cart_id", "movie_id"])
+    )
+    await db.commit()
+
+
+async def remove_movie_from_cart(db: AsyncSession, user_id: int, movie_id: int) -> None:
+    cart_id = select(Cart.id).where(Cart.user_id == user_id).scalar_subquery()
+    await db.execute(
+        delete(CartItem).where(
+            CartItem.cart_id == cart_id, CartItem.movie_id == movie_id
+        )
     )
     await db.commit()
