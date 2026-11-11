@@ -1,0 +1,36 @@
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.cart.models import Cart, CartItem
+from src.movies.exceptions import EntityNotFoundError
+from src.movies.models import Movie
+
+
+async def _get_or_create_cart(
+    db: AsyncSession,
+    user_id: int,
+) -> Cart:
+    await db.execute(
+        insert(Cart)
+        .values(user_id=user_id)
+        .on_conflict_do_nothing(index_elements=["user_id"])
+    )
+    result = await db.execute(select(Cart).where(Cart.user_id == user_id))
+    return result.scalar_one()
+
+
+async def add_movie_to_cart(
+    db: AsyncSession,
+    user_id: int,
+    movie_id: int,
+) -> None:
+    if await db.get(Movie, movie_id) is None:
+        raise EntityNotFoundError(Movie.__name__)
+    cart = await _get_or_create_cart(db=db, user_id=user_id)
+    await db.execute(
+        insert(CartItem)
+        .values(cart_id=cart.id, movie_id=movie_id)
+        .on_conflict_do_nothing(index_elements=["cart_id", "movie_id"])
+    )
+    await db.commit()
