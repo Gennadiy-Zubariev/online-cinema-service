@@ -24,6 +24,7 @@ from src.movies.models import (
     Movie,
     MovieRating,
     MovieReaction,
+    PurchasedMovie,
     Star,
     movie_directors,
     movie_genres,
@@ -749,6 +750,22 @@ async def test_delete_movie_in_order_returns_409(
     assert response.json() == {"detail": "Movie is in use."}
     assert await count_rows(db_session, Movie) == 1
     storage_mock["delete_file"].assert_not_called()
+
+
+async def test_delete_purchased_movie_returns_409(
+    client: AsyncClient,
+    create_user: CreateUser,
+    db_session: AsyncSession,
+    movie: Movie,
+) -> None:
+    caller = await create_caller(create_user)
+    db_session.add(PurchasedMovie(user_id=caller.id, movie_id=movie.id))
+    await db_session.commit()
+
+    response = await client.delete(movie_url(movie.id), headers=auth_header(caller))
+
+    assert response.status_code == 409
+    assert await count_rows(db_session, Movie) == 1
 
 
 async def test_delete_movie_in_cart_removes_cart_item(
