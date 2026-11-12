@@ -200,9 +200,11 @@ async def upload_movie_poster(
 )
 async def remove_movie(db: DbSession, movie_id: int) -> None:
     """Delete a movie and movie poster(moderator only).
+    Can't delete ordered movie.
 
     Its links to genres, directors and stars are removed as well;
     the catalog entities themselves are kept.
     Returns 404 if the movie does not exist.
+    Returns 409 if the movie in orders.
     """
     await delete_movie(db=db, movie_id=movie_id)

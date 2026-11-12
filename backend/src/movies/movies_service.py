@@ -1,12 +1,14 @@
 from uuid import uuid4
 
+from psycopg import IntegrityError
+from psycopg.errors import ForeignKeyViolation
 from sqlalchemy import select, func, or_, Select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 from starlette.concurrency import run_in_threadpool
 
 from src.movies.entities_service import NamedModel, commit_unique, get_named
-from src.movies.exceptions import EntityNotFoundError
+from src.movies.exceptions import EntityNotFoundError, EntityInUseError
 from src.movies.models import Genre, Star, Director, Certification, Movie
 from src.movies.schemas import (
     MovieCreateRequest,
@@ -157,7 +159,13 @@ async def delete_movie(db: AsyncSession, movie_id: int) -> None:
         raise EntityNotFoundError(Movie.__name__)
     poster_key = movie.poster
     await db.delete(movie)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as error:
+        await db.rollback()
+        if isinstance(error.orig, ForeignKeyViolation):
+            raise EntityInUseError(Movie.__name__) from error
+        raise
     if poster_key is not None:
         await run_in_threadpool(delete_file, poster_key)
 
