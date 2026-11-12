@@ -1,6 +1,7 @@
 from sqlalchemy import select, delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.cart.models import Cart, CartItem
 from src.movies.exceptions import EntityNotFoundError
@@ -44,3 +45,15 @@ async def remove_movie_from_cart(db: AsyncSession, user_id: int, movie_id: int) 
         )
     )
     await db.commit()
+
+
+async def list_cart_movies(db: AsyncSession, user_id: int) -> list[Movie]:
+    result = await db.scalars(
+        select(Movie)
+        .join(CartItem, CartItem.movie_id == Movie.id)
+        .join(Cart, Cart.id == CartItem.cart_id)
+        .where(Cart.user_id == user_id)
+        .options(selectinload(Movie.genres))
+        .order_by(CartItem.id)
+    )
+    return list(result.all())

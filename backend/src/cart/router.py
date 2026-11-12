@@ -1,7 +1,8 @@
 from fastapi import APIRouter, status
 
 from src.accounts.dependencies import CurrentUser
-from src.cart.service import add_movie_to_cart, remove_movie_from_cart
+from src.cart.schemas import CartResponse, CartMovieResponse
+from src.cart.service import add_movie_to_cart, remove_movie_from_cart, list_cart_movies
 from src.database.session import DbSession
 
 router = APIRouter(prefix="/cart", tags=["cart"])
@@ -35,3 +36,15 @@ async def delete_cart_item(
     Idempotent: returns 204 even if the movie is not in the cart.
     """
     await remove_movie_from_cart(db=db, user_id=current_user.id, movie_id=movie_id)
+
+
+@router.get("/items", status_code=status.HTTP_200_OK, response_model=CartResponse)
+async def get_cart_items(db: DbSession, current_user: CurrentUser) -> CartResponse:
+    """List movies in the current user's cart (oldest added first).
+
+    Returns an empty list if the cart does not exist yet.
+    """
+    movies = await list_cart_movies(db=db, user_id=current_user.id)
+    return CartResponse(
+        items=[CartMovieResponse.model_validate(movie) for movie in movies]
+    )
