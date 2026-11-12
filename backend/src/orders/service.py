@@ -1,5 +1,6 @@
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.cart.models import Cart, CartItem
 from src.cart.service import list_cart_movies
@@ -44,3 +45,17 @@ async def create_order(
     )
     await db.commit()
     return order, excluded_movies
+
+
+async def list_orders(
+    db: AsyncSession, user_id: int, page: int, page_size: int
+) -> tuple[list[Order], int]:
+    stmt = select(Order).where(Order.user_id == user_id)
+    total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
+    result = await db.scalars(
+        stmt.options(selectinload(Order.items).joinedload(OrderItem.movie))
+        .order_by(Order.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    return list(result.all()), total or 0

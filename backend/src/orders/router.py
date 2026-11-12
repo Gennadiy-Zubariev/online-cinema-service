@@ -1,10 +1,16 @@
 from fastapi import APIRouter, status
 
 from src.accounts.dependencies import CurrentUser
+from src.common.pagination import Pagination
 from src.database.session import DbSession
 from src.movies.schemas import NamedEntityResponse
-from src.orders.schemas import OrderCreateResponse, OrderItemResponse
-from src.orders.service import create_order
+from src.orders.schemas import (
+    OrderCreateResponse,
+    OrderItemResponse,
+    OrderListResponse,
+    OrderResponse,
+)
+from src.orders.service import create_order, list_orders
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
@@ -29,4 +35,26 @@ async def add_order(db: DbSession, current_user: CurrentUser) -> OrderCreateResp
         excluded_movies=[
             NamedEntityResponse.model_validate(movie) for movie in excluded_movies
         ],
+    )
+
+
+@router.get("", status_code=status.HTTP_200_OK, response_model=OrderListResponse)
+async def get_orders_list(
+    db: DbSession, current_user: CurrentUser, pagination: Pagination
+) -> OrderListResponse:
+    """List the current user's orders, newest first.
+
+    Each order includes its items (movie and price at order time), total and status.
+    """
+    orders, total = await list_orders(
+        db=db,
+        user_id=current_user.id,
+        page=pagination.page,
+        page_size=pagination.page_size,
+    )
+    return OrderListResponse(
+        items=[OrderResponse.model_validate(order) for order in orders],
+        total=total,
+        page=pagination.page,
+        page_size=pagination.page_size,
     )

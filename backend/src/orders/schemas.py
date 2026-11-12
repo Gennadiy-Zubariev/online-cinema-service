@@ -27,3 +27,10 @@ class OrderResponse(BaseModel):
 
 class OrderCreateResponse(OrderResponse):
     excluded_movies: list[NamedEntityResponse]
+
+
+class OrderListResponse(BaseModel):
+    items: list[OrderResponse]
+    total: int
+    page: int
+    page_size: int
