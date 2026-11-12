@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.accounts.models import User, UserGroupEnum
 from src.cart.models import Cart, CartItem
 from src.movies.models import Movie, PurchasedMovie
-from src.orders.models import Order, OrderItem
+from src.orders.models import Order, OrderItem, OrderStatusEnum
 from tests.integration.conftest import (
     Catalog,
     CreateUser,
@@ -318,3 +318,141 @@ async def test_all_movies_purchased_returns_400(
         movie.id,
         other_movie.id,
     }
+
+
+# --- list of own orders ---
+
+
+async def save_order(
+    db_session: AsyncSession,
+    user: User,
+    *movies: Movie,
+    status: OrderStatusEnum = OrderStatusEnum.PENDING,
+) -> Order:
+    """Save an order directly in the DB (bypasses the cart and the API)."""
+    order = Order(
+        user_id=user.id,
+        status=status,
+        total_amount=sum(movie.price for movie in movies),
+        items=[OrderItem(movie=m, price_at_order=m.price) for m in movies],
+    )
+    db_session.add(order)
+    await db_session.commit()
+    return order
+
+
+async def test_list_orders_requires_token(client: AsyncClient) -> None:
+    response = await client.get(ORDERS_URL)
+
+    assert response.status_code == 401
+
+
+async def test_list_orders_empty(client: AsyncClient, user: User) -> None:
+    response = await client.get(ORDERS_URL, headers=auth_header(user))
+
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "total": 0, "page": 1, "page_size": 20}
+
+
+async def test_list_orders_fields(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    movie: Movie,
+    other_movie: Movie,
+) -> None:
+    order = await save_order(
+        db_session, user, movie, other_movie, status=OrderStatusEnum.PAID
+    )
+
+    response = await client.get(ORDERS_URL, headers=auth_header(user))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    item = body["items"][0]
+    assert item["id"] == order.id
+    assert item["created_at"] is not None
+    assert item["status"] == "paid"
+    assert item["total_amount"] == "17.98"
+    assert [(i["movie"], i["price_at_order"]) for i in item["items"]] == [
+        ({"id": movie.id, "name": "Inception"}, "7.99"),
+        ({"id": other_movie.id, "name": "Interstellar"}, "9.99"),
+    ]
+    assert "excluded_movies" not in item
+    assert "user_id" not in item
+
+
+async def test_list_orders_shows_only_own(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    other_user: User,
+    movie: Movie,
+) -> None:
+    own = await save_order(db_session, user, movie)
+    await save_order(db_session, other_user, movie)
+
+    response = await client.get(ORDERS_URL, headers=auth_header(user))
+
+    body = response.json()
+    assert [order["id"] for order in body["items"]] == [own.id]
+    assert body["total"] == 1
+
+
+async def test_list_orders_newest_first(
+    client: AsyncClient, db_session: AsyncSession, user: User, movie: Movie
+) -> None:
+    first = await save_order(db_session, user, movie)
+    second = await save_order(db_session, user, movie)
+    third = await save_order(db_session, user, movie)
+
+    response = await client.get(ORDERS_URL, headers=auth_header(user))
+
+    ids = [order["id"] for order in response.json()["items"]]
+    assert ids == [third.id, second.id, first.id]
+
+
+async def test_list_orders_pagination(
+    client: AsyncClient, db_session: AsyncSession, user: User, movie: Movie
+) -> None:
+    orders = [await save_order(db_session, user, movie) for _ in range(3)]
+
+    response = await client.get(
+        ORDERS_URL, params={"page": 2, "page_size": 2}, headers=auth_header(user)
+    )
+
+    body = response.json()
+    assert [order["id"] for order in body["items"]] == [orders[0].id]
+    assert body["total"] == 3
+    assert body["page"] == 2
+    assert body["page_size"] == 2
+
+
+async def test_list_orders_loads_items_eagerly(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    movie: Movie,
+    other_movie: Movie,
+) -> None:
+    """Nothing is in the identity map: items and movies must be eager-loaded."""
+    await save_order(db_session, user, movie, other_movie)
+    db_session.expunge_all()
+
+    response = await client.get(ORDERS_URL, headers=auth_header(user))
+
+    assert response.status_code == 200
+    names = [i["movie"]["name"] for i in response.json()["items"][0]["items"]]
+    assert names == ["Inception", "Interstellar"]
+
+
+@pytest.mark.parametrize(
+    "params", [{"page": 0}, {"page_size": 0}, {"page_size": 101}, {"page": "abc"}]
+)
+async def test_list_orders_invalid_pagination_returns_422(
+    client: AsyncClient, user: User, params: dict[str, int | str]
+) -> None:
+    response = await client.get(ORDERS_URL, params=params, headers=auth_header(user))
+
+    assert response.status_code == 422
