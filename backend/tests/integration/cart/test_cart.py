@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.accounts.models import User, UserGroupEnum
 from src.cart.models import Cart, CartItem
-from src.movies.models import Movie
+from src.movies.models import Movie, PurchasedMovie
 from tests.integration.conftest import (
     UNKNOWN_ID,
     Catalog,
@@ -165,6 +165,36 @@ async def test_add_unknown_movie_returns_404(
     assert response.status_code == 404
     assert response.json() == {"detail": "Movie not found."}
     assert await count_carts(db_session) == 0
+
+
+async def test_add_purchased_movie_returns_409(
+    client: AsyncClient, db_session: AsyncSession, user: User, movie: Movie
+) -> None:
+    db_session.add(PurchasedMovie(user_id=user.id, movie_id=movie.id))
+    await db_session.commit()
+
+    response = await client.put(cart_item_url(movie.id), headers=auth_header(user))
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Movie already purchased."}
+    assert await stored_cart_items(db_session) == set()
+    assert await count_carts(db_session) == 0
+
+
+async def test_add_movie_purchased_by_other_user(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    other_user: User,
+    movie: Movie,
+) -> None:
+    db_session.add(PurchasedMovie(user_id=other_user.id, movie_id=movie.id))
+    await db_session.commit()
+
+    response = await client.put(cart_item_url(movie.id), headers=auth_header(user))
+
+    assert response.status_code == 204
+    assert await stored_cart_items(db_session) == {(user.id, movie.id)}
 
 
 @pytest.mark.parametrize("method", ["PUT", "DELETE"])

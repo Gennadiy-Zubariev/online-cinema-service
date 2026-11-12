@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     S3_PUBLIC_ENDPOINT_URL: str = "http://localhost:9000"
     S3_REGION: str = "us-east-1"
 
+    PENDING_ORDER_EXPIRE_DAYS: int = 7
+
     @property
     def database_url(self) -> URL:
         return URL.create(

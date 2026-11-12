@@ -25,6 +25,7 @@ async def put_cart_item(
     The cart is created on the first added movie.
     Idempotent: adding a movie that is already in the cart changes nothing.
     Returns 404 if the movie does not exist.
+    Returns 409 if the movie is already purchased.
     """
     await add_movie_to_cart(db=db, user_id=current_user.id, movie_id=movie_id)
 

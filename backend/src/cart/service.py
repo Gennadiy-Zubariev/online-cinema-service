@@ -3,9 +3,11 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.cart.exceptions import MovieAlreadyPurchasedError
 from src.cart.models import Cart, CartItem
 from src.movies.exceptions import EntityNotFoundError
 from src.movies.models import Movie
+from src.movies.purchased_service import is_movie_purchased
 
 
 async def _get_or_create_cart(
@@ -28,6 +30,8 @@ async def add_movie_to_cart(
 ) -> None:
     if await db.get(Movie, movie_id) is None:
         raise EntityNotFoundError(Movie.__name__)
+    if await is_movie_purchased(db=db, user_id=user_id, movie_id=movie_id):
+        raise MovieAlreadyPurchasedError()
     cart = await _get_or_create_cart(db=db, user_id=user_id)
     await db.execute(
         insert(CartItem)

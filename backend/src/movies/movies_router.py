@@ -199,10 +199,11 @@ async def upload_movie_poster(
     dependencies=[Depends(get_current_moderator)],
 )
 async def remove_movie(db: DbSession, movie_id: int) -> None:
-    """Delete a movie and movie poster(moderator only).
+    """Delete a movie and its poster (moderator only).
 
     Its links to genres, directors and stars are removed as well;
-    the catalog entities themselves are kept.
+    the catalog entities themselves are kept. The movie is removed from carts.
     Returns 404 if the movie does not exist.
+    Returns 409 if the movie is in at least one order.
     """
     await delete_movie(db=db, movie_id=movie_id)

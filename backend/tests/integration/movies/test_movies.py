@@ -15,6 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.accounts.models import UserGroupEnum
+from src.cart.models import Cart, CartItem
 from src.config.settings import get_settings
 from src.movies.models import (
     Certification,
@@ -23,12 +24,14 @@ from src.movies.models import (
     Movie,
     MovieRating,
     MovieReaction,
+    PurchasedMovie,
     Star,
     movie_directors,
     movie_genres,
     movie_stars,
 )
 from src.movies.movies_service import MAX_POSTER_SIZE
+from src.orders.models import Order, OrderItem, OrderStatusEnum
 from tests.integration.conftest import (
     UNKNOWN_ID,
     Catalog,
@@ -718,6 +721,71 @@ async def test_delete_unknown_movie_returns_404(
     assert response.status_code == 404
     assert response.json() == {"detail": "Movie not found."}
     storage_mock["delete_file"].assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "status", [OrderStatusEnum.PENDING, OrderStatusEnum.PAID, OrderStatusEnum.CANCELED]
+)
+async def test_delete_movie_in_order_returns_409(
+    client: AsyncClient,
+    create_user: CreateUser,
+    db_session: AsyncSession,
+    movie: Movie,
+    storage_mock: dict[str, MagicMock],
+    status: OrderStatusEnum,
+) -> None:
+    movie.poster = "posters/1/poster.jpg"
+    caller = await create_caller(create_user)
+    order = Order(user_id=caller.id, status=status)
+    db_session.add(order)
+    await db_session.flush()
+    db_session.add(
+        OrderItem(order_id=order.id, movie_id=movie.id, price_at_order=movie.price)
+    )
+    await db_session.commit()
+
+    response = await client.delete(movie_url(movie.id), headers=auth_header(caller))
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Movie is in use."}
+    assert await count_rows(db_session, Movie) == 1
+    storage_mock["delete_file"].assert_not_called()
+
+
+async def test_delete_purchased_movie_returns_409(
+    client: AsyncClient,
+    create_user: CreateUser,
+    db_session: AsyncSession,
+    movie: Movie,
+) -> None:
+    caller = await create_caller(create_user)
+    db_session.add(PurchasedMovie(user_id=caller.id, movie_id=movie.id))
+    await db_session.commit()
+
+    response = await client.delete(movie_url(movie.id), headers=auth_header(caller))
+
+    assert response.status_code == 409
+    assert await count_rows(db_session, Movie) == 1
+
+
+async def test_delete_movie_in_cart_removes_cart_item(
+    client: AsyncClient,
+    create_user: CreateUser,
+    db_session: AsyncSession,
+    movie: Movie,
+) -> None:
+    caller = await create_caller(create_user)
+    cart = Cart(user_id=caller.id)
+    db_session.add(cart)
+    await db_session.flush()
+    db_session.add(CartItem(cart_id=cart.id, movie_id=movie.id))
+    await db_session.commit()
+
+    response = await client.delete(movie_url(movie.id), headers=auth_header(caller))
+
+    assert response.status_code == 204
+    assert await count_rows(db_session, CartItem) == 0
+    assert await count_rows(db_session, Cart) == 1
 
 
 # --- poster ---
