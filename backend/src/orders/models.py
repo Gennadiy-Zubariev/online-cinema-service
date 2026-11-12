@@ -10,9 +10,10 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database.base import Base
+from src.movies.models import Movie
 
 
 class OrderStatusEnum(enum.StrEnum):
@@ -35,6 +36,7 @@ class Order(Base):
         String(20), server_default=OrderStatusEnum.PENDING.value
     )
     total_amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    items: Mapped[list["OrderItem"]] = relationship(order_by="OrderItem.id")
 
 
 class OrderItem(Base):
@@ -47,3 +49,5 @@ class OrderItem(Base):
         ForeignKey("movies.id", ondelete="RESTRICT"), index=True
     )
     price_at_order: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+
+    movie: Mapped[Movie] = relationship()

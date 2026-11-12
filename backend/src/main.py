@@ -52,6 +52,12 @@ from src.movies.exceptions import (
 from src.movies.favorites_router import router as movie_favorites_router
 from src.movies.movies_router import router as movies_router
 from src.movies.reactions_router import router as movie_reactions_router
+from src.orders.exception_handlers import (
+    empty_cart_handler,
+    all_movies_purchased_handler,
+)
+from src.orders.exceptions import EmptyCartError, AllMoviesPurchasedError
+from src.orders.router import router as orders_router
 from src.storage.client import ensure_bucket_exists
 from src.storage.exception_handlers import (
     unsupported_image_type_handler,
@@ -93,6 +99,8 @@ app.add_exception_handler(EntityAlreadyExistsError, entity_already_exists_handle
 app.add_exception_handler(EntityInUseError, entity_in_use_handler)
 app.add_exception_handler(NestedReplyError, nested_reply_handler)
 app.add_exception_handler(MovieAlreadyPurchasedError, movie_already_purchase_handler)
+app.add_exception_handler(EmptyCartError, empty_cart_handler)
+app.add_exception_handler(AllMoviesPurchasedError, all_movies_purchased_handler)
 
 
 @app.get("/health")
@@ -108,3 +116,4 @@ app.include_router(movie_reactions_router, prefix=API_PREFIX)
 app.include_router(movie_comments_router, prefix=API_PREFIX)
 app.include_router(movie_favorites_router, prefix=API_PREFIX)
 app.include_router(cart_router, prefix=API_PREFIX)
+app.include_router(orders_router, prefix=API_PREFIX)
