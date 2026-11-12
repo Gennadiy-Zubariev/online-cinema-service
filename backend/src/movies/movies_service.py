@@ -1,8 +1,8 @@
 from uuid import uuid4
 
-from psycopg import IntegrityError
 from psycopg.errors import ForeignKeyViolation
 from sqlalchemy import select, func, or_, Select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 from starlette.concurrency import run_in_threadpool
