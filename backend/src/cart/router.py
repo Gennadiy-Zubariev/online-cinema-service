@@ -2,7 +2,12 @@ from fastapi import APIRouter, status
 
 from src.accounts.dependencies import CurrentUser
 from src.cart.schemas import CartResponse, CartMovieResponse
-from src.cart.service import add_movie_to_cart, remove_movie_from_cart, list_cart_movies
+from src.cart.service import (
+    add_movie_to_cart,
+    remove_movie_from_cart,
+    list_cart_movies,
+    clear_cart,
+)
 from src.database.session import DbSession
 
 router = APIRouter(prefix="/cart", tags=["cart"])
@@ -48,3 +53,12 @@ async def get_cart_items(db: DbSession, current_user: CurrentUser) -> CartRespon
     return CartResponse(
         items=[CartMovieResponse.model_validate(movie) for movie in movies]
     )
+
+
+@router.delete("/items", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_cart_items(db: DbSession, current_user: CurrentUser) -> None:
+    """Clear the current user's cart.
+
+    Idempotent: returns 204 even if the cart is empty or does not exist.
+    """
+    return await clear_cart(db=db, user_id=current_user.id)

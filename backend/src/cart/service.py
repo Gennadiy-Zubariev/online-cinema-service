@@ -57,3 +57,9 @@ async def list_cart_movies(db: AsyncSession, user_id: int) -> list[Movie]:
         .order_by(CartItem.id)
     )
     return list(result.all())
+
+
+async def clear_cart(db: AsyncSession, user_id: int) -> None:
+    cart_id = select(Cart.id).where(Cart.user_id == user_id).scalar_subquery()
+    await db.execute(delete(CartItem).where(CartItem.cart_id == cart_id))
+    await db.commit()
