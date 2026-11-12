@@ -72,8 +72,9 @@ async def other_movie(db_session: AsyncSession, catalog: Catalog) -> Movie:
 # --- access control ---
 
 
-async def test_get_cart_requires_token(client: AsyncClient) -> None:
-    response = await client.get(CART_ITEMS_URL)
+@pytest.mark.parametrize("method", ["GET", "DELETE"])
+async def test_cart_items_requires_token(client: AsyncClient, method: str) -> None:
+    response = await client.request(method, CART_ITEMS_URL)
 
     assert response.status_code == 401
 
@@ -344,3 +345,60 @@ async def test_get_cart_after_removing_last_movie_is_empty(
     response = await client.get(CART_ITEMS_URL, headers=auth_header(user))
 
     assert response.json() == {"items": []}
+
+
+# --- clear ---
+
+
+async def test_clear_cart(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    movie: Movie,
+    other_movie: Movie,
+) -> None:
+    await client.put(cart_item_url(movie.id), headers=auth_header(user))
+    await client.put(cart_item_url(other_movie.id), headers=auth_header(user))
+
+    response = await client.delete(CART_ITEMS_URL, headers=auth_header(user))
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert await stored_cart_items(db_session) == set()
+    assert await count_carts(db_session) == 1
+
+
+async def test_clear_cart_keeps_other_users_cart(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    other_user: User,
+    movie: Movie,
+) -> None:
+    await client.put(cart_item_url(movie.id), headers=auth_header(user))
+    await client.put(cart_item_url(movie.id), headers=auth_header(other_user))
+
+    await client.delete(CART_ITEMS_URL, headers=auth_header(user))
+
+    assert await stored_cart_items(db_session) == {(other_user.id, movie.id)}
+
+
+async def test_clear_empty_cart_is_idempotent(
+    client: AsyncClient, db_session: AsyncSession, user: User, movie: Movie
+) -> None:
+    await client.put(cart_item_url(movie.id), headers=auth_header(user))
+    await client.delete(CART_ITEMS_URL, headers=auth_header(user))
+
+    response = await client.delete(CART_ITEMS_URL, headers=auth_header(user))
+
+    assert response.status_code == 204
+    assert await count_carts(db_session) == 1
+
+
+async def test_clear_without_cart_does_not_create_it(
+    client: AsyncClient, db_session: AsyncSession, user: User
+) -> None:
+    response = await client.delete(CART_ITEMS_URL, headers=auth_header(user))
+
+    assert response.status_code == 204
+    assert await count_carts(db_session) == 0
