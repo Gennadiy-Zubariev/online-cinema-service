@@ -31,6 +31,8 @@ from src.accounts.exceptions import (
     UserNotFoundError,
 )
 from src.accounts.router import router as accounts_router
+from src.cart.exception_handlers import movie_already_purchase_handler
+from src.cart.exceptions import MovieAlreadyPurchasedError
 from src.cart.router import router as cart_router
 from src.config.settings import get_settings
 from src.movies.comments_router import router as movie_comments_router
@@ -90,6 +92,7 @@ app.add_exception_handler(EntityNotFoundError, entity_not_found_handler)
 app.add_exception_handler(EntityAlreadyExistsError, entity_already_exists_handler)
 app.add_exception_handler(EntityInUseError, entity_in_use_handler)
 app.add_exception_handler(NestedReplyError, nested_reply_handler)
+app.add_exception_handler(MovieAlreadyPurchasedError, movie_already_purchase_handler)
 
 
 @app.get("/health")
