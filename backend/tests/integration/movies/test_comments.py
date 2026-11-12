@@ -13,14 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.accounts.models import User, UserGroupEnum
 from src.movies.models import CommentLike, Movie, MovieComment
-from tests.integration.conftest import CreateUser
-from tests.integration.movies.conftest import (
+from tests.integration.conftest import (
     UNKNOWN_ID,
     Catalog,
+    CreateUser,
     auth_header,
     create_caller,
-    movie_url,
 )
+from tests.integration.movies.conftest import movie_url
 
 COMMENT_NOT_FOUND = {"detail": "Comment not found."}
 

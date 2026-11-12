@@ -31,6 +31,7 @@ from src.accounts.exceptions import (
     UserNotFoundError,
 )
 from src.accounts.router import router as accounts_router
+from src.cart.router import router as cart_router
 from src.config.settings import get_settings
 from src.movies.comments_router import router as movie_comments_router
 from src.movies.entities_router import router as movie_entities_router
@@ -103,3 +104,4 @@ app.include_router(movies_router, prefix=API_PREFIX)
 app.include_router(movie_reactions_router, prefix=API_PREFIX)
 app.include_router(movie_comments_router, prefix=API_PREFIX)
 app.include_router(movie_favorites_router, prefix=API_PREFIX)
+app.include_router(cart_router, prefix=API_PREFIX)

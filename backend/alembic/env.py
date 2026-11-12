@@ -4,6 +4,7 @@ from alembic import context
 from sqlalchemy import create_engine, pool
 
 import src.accounts.models  # noqa: F401
+import src.cart.models  # noqa: F401
 import src.movies.models  # noqa: F401
 from src.config.settings import get_settings
 from src.database.base import Base
