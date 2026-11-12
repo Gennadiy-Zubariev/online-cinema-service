@@ -72,6 +72,12 @@ async def other_movie(db_session: AsyncSession, catalog: Catalog) -> Movie:
 # --- access control ---
 
 
+async def test_get_cart_requires_token(client: AsyncClient) -> None:
+    response = await client.get(CART_ITEMS_URL)
+
+    assert response.status_code == 401
+
+
 @pytest.mark.parametrize("method", ["PUT", "DELETE"])
 async def test_cart_item_requires_token(
     client: AsyncClient, movie: Movie, method: str
@@ -248,3 +254,93 @@ async def test_remove_without_cart_does_not_create_it(
 
     assert response.status_code == 204
     assert await count_carts(db_session) == 0
+
+
+# --- view ---
+
+
+async def test_get_cart_without_cart_returns_empty_list(
+    client: AsyncClient, db_session: AsyncSession, user: User
+) -> None:
+    response = await client.get(CART_ITEMS_URL, headers=auth_header(user))
+
+    assert response.status_code == 200
+    assert response.json() == {"items": []}
+    assert await count_carts(db_session) == 0
+
+
+async def test_get_cart_returns_movie_fields(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    movie: Movie,
+    catalog: Catalog,
+) -> None:
+    await client.put(cart_item_url(movie.id), headers=auth_header(user))
+    # Fresh session state: catches a missing eager load of genres.
+    db_session.expunge_all()
+
+    response = await client.get(CART_ITEMS_URL, headers=auth_header(user))
+
+    assert response.status_code == 200
+    genre = catalog.genres[0]
+    assert response.json() == {
+        "items": [
+            {
+                "id": movie.id,
+                "name": "Inception",
+                "year": 2010,
+                "price": "7.99",
+                "genres": [{"id": genre.id, "name": genre.name}],
+            }
+        ]
+    }
+
+
+async def test_get_cart_movie_without_genres(
+    client: AsyncClient, user: User, other_movie: Movie
+) -> None:
+    await client.put(cart_item_url(other_movie.id), headers=auth_header(user))
+
+    response = await client.get(CART_ITEMS_URL, headers=auth_header(user))
+
+    assert response.json()["items"][0]["genres"] == []
+
+
+async def test_get_cart_ordered_by_addition(
+    client: AsyncClient, user: User, movie: Movie, other_movie: Movie
+) -> None:
+    await client.put(cart_item_url(other_movie.id), headers=auth_header(user))
+    await client.put(cart_item_url(movie.id), headers=auth_header(user))
+
+    response = await client.get(CART_ITEMS_URL, headers=auth_header(user))
+
+    ids = [item["id"] for item in response.json()["items"]]
+    assert ids == [other_movie.id, movie.id]
+
+
+async def test_get_cart_shows_only_own_movies(
+    client: AsyncClient,
+    user: User,
+    other_user: User,
+    movie: Movie,
+    other_movie: Movie,
+) -> None:
+    await client.put(cart_item_url(movie.id), headers=auth_header(user))
+    await client.put(cart_item_url(other_movie.id), headers=auth_header(other_user))
+
+    response = await client.get(CART_ITEMS_URL, headers=auth_header(user))
+
+    ids = [item["id"] for item in response.json()["items"]]
+    assert ids == [movie.id]
+
+
+async def test_get_cart_after_removing_last_movie_is_empty(
+    client: AsyncClient, user: User, movie: Movie
+) -> None:
+    await client.put(cart_item_url(movie.id), headers=auth_header(user))
+    await client.delete(cart_item_url(movie.id), headers=auth_header(user))
+
+    response = await client.get(CART_ITEMS_URL, headers=auth_header(user))
+
+    assert response.json() == {"items": []}
