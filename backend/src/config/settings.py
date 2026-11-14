@@ -52,6 +52,8 @@ class Settings(BaseSettings):
 
     PENDING_ORDER_EXPIRE_DAYS: int = 7
 
+    STRIPE_SECRET_KEY: SecretStr
+
     @property
     def database_url(self) -> URL:
         return URL.create(
