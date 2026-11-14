@@ -1,7 +1,8 @@
-from stripe import StripeClient
+from stripe import StripeClient, SignatureVerificationError, Event
 
 from src.config.settings import get_settings
 from src.orders.models import OrderItem
+from src.payments.exceptions import InvalidWebhookError
 
 CURRENCY = "usd"
 
@@ -36,3 +37,12 @@ def create_checkout_session(order_id: int, items: list[OrderItem]) -> str:
     if session.url is None:
         raise RuntimeError("Stripe returned a checkout session without URL.")
     return session.url
+
+
+def parse_webhook_event(payload: bytes, signature: str | None) -> Event:
+    try:
+        return stripe_client.construct_event(
+            payload, signature, settings.STRIPE_WEBHOOK_SECRET.get_secret_value()
+        )
+    except (ValueError, SignatureVerificationError) as exc:
+        raise InvalidWebhookError() from exc
