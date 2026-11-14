@@ -55,8 +55,17 @@ from src.movies.reactions_router import router as movie_reactions_router
 from src.orders.exception_handlers import (
     empty_cart_handler,
     all_movies_purchased_handler,
+    order_not_found_handler,
+    order_not_pending_handler,
+    order_movies_purchased_handler,
 )
-from src.orders.exceptions import EmptyCartError, AllMoviesPurchasedError
+from src.orders.exceptions import (
+    EmptyCartError,
+    AllMoviesPurchasedError,
+    OrderNotFoundError,
+    OrderNotPendingError,
+    OrderMoviesPurchasedError,
+)
 from src.orders.router import router as orders_router
 from src.storage.client import ensure_bucket_exists
 from src.storage.exception_handlers import (
@@ -101,6 +110,9 @@ app.add_exception_handler(NestedReplyError, nested_reply_handler)
 app.add_exception_handler(MovieAlreadyPurchasedError, movie_already_purchase_handler)
 app.add_exception_handler(EmptyCartError, empty_cart_handler)
 app.add_exception_handler(AllMoviesPurchasedError, all_movies_purchased_handler)
+app.add_exception_handler(OrderNotFoundError, order_not_found_handler)
+app.add_exception_handler(OrderNotPendingError, order_not_pending_handler)
+app.add_exception_handler(OrderMoviesPurchasedError, order_movies_purchased_handler)
 
 
 @app.get("/health")
