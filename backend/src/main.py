@@ -67,6 +67,7 @@ from src.orders.exceptions import (
     OrderMoviesPurchasedError,
 )
 from src.orders.router import router as orders_router
+from src.payments.router import router as payments_router
 from src.storage.client import ensure_bucket_exists
 from src.storage.exception_handlers import (
     unsupported_image_type_handler,
@@ -129,3 +130,4 @@ app.include_router(movie_comments_router, prefix=API_PREFIX)
 app.include_router(movie_favorites_router, prefix=API_PREFIX)
 app.include_router(cart_router, prefix=API_PREFIX)
 app.include_router(orders_router, prefix=API_PREFIX)
+app.include_router(payments_router, prefix=API_PREFIX)
