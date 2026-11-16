@@ -3,7 +3,7 @@ name = "online-cinema-service"
 version = "0.1.0"
 description = "Online cinema backend (FastAPI)"
 authors = [
-    {name = "Gennadiy-Zubariev", email = "genada89@gmail.com"}
+    { name = "Gennadiy-Zubariev", email = "genada89@gmail.com" }
 ]
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -35,7 +35,8 @@ dev = [
     "pytest-asyncio (>=1.4.1,<2.0.0)",
     "httpx (>=0.28.1,<0.29.0)",
     "celery-types (>=0.26.0,<0.27.0)",
-    "boto3-stubs[s3] (>=1.43.124,<2.0.0)"
+    "boto3-stubs[s3] (>=1.43.124,<2.0.0)",
+    "pytest-cov (>=7.1.0,<8.0.0)"
 ]
 
 [tool.black]
@@ -51,3 +52,15 @@ plugins = ["pydantic.mypy"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+concurrency = ["greenlet", "thread"]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+]
