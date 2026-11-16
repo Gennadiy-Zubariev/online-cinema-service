@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from stripe import Event
 
+from src.accounts.models import User
 from src.movies.models import PurchasedMovie
 from src.movies.purchased_service import get_purchased_movie_ids
 from src.orders.exceptions import (
@@ -18,6 +19,7 @@ from src.orders.exceptions import (
 from src.orders.models import Order, OrderItem, OrderStatusEnum
 from src.payments.models import PaymentStatusEnum, Payment
 from src.payments.stripe_client import create_checkout_session
+from src.tasks.emails import send_payment_confirmation_email
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +84,9 @@ async def _complete_order_payment(
         .values([{"user_id": order.user_id, "movie_id": m} for m in movie_ids])
         .on_conflict_do_nothing()
     )
+    email = await db.scalar(select(User.email).where(User.id == order.user_id))
     await db.commit()
+    send_payment_confirmation_email.delay(email, order.id, str(amount))
 
 
 async def _cancel_order_payment(
