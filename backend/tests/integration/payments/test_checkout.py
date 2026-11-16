@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.accounts.models import User
 from src.movies.models import Movie
-from src.orders.models import Order, OrderItem, OrderStatusEnum
+from src.orders.models import OrderItem, OrderStatusEnum
 from src.payments import service as payments_service
 from tests.integration.conftest import UNKNOWN_ID, auth_header
 from tests.integration.payments.conftest import (
