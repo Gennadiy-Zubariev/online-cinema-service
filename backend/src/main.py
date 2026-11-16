@@ -51,13 +51,26 @@ from src.movies.exceptions import (
 )
 from src.movies.favorites_router import router as movie_favorites_router
 from src.movies.movies_router import router as movies_router
+from src.movies.purchased_router import router as movie_purchased_router
 from src.movies.reactions_router import router as movie_reactions_router
 from src.orders.exception_handlers import (
     empty_cart_handler,
     all_movies_purchased_handler,
+    order_not_found_handler,
+    order_not_pending_handler,
+    order_movies_purchased_handler,
 )
-from src.orders.exceptions import EmptyCartError, AllMoviesPurchasedError
+from src.orders.exceptions import (
+    EmptyCartError,
+    AllMoviesPurchasedError,
+    OrderNotFoundError,
+    OrderNotPendingError,
+    OrderMoviesPurchasedError,
+)
 from src.orders.router import router as orders_router
+from src.payments.exception_handlers import invalid_webhook_handler
+from src.payments.exceptions import InvalidWebhookError
+from src.payments.router import router as payments_router
 from src.storage.client import ensure_bucket_exists
 from src.storage.exception_handlers import (
     unsupported_image_type_handler,
@@ -101,6 +114,10 @@ app.add_exception_handler(NestedReplyError, nested_reply_handler)
 app.add_exception_handler(MovieAlreadyPurchasedError, movie_already_purchase_handler)
 app.add_exception_handler(EmptyCartError, empty_cart_handler)
 app.add_exception_handler(AllMoviesPurchasedError, all_movies_purchased_handler)
+app.add_exception_handler(OrderNotFoundError, order_not_found_handler)
+app.add_exception_handler(OrderNotPendingError, order_not_pending_handler)
+app.add_exception_handler(OrderMoviesPurchasedError, order_movies_purchased_handler)
+app.add_exception_handler(InvalidWebhookError, invalid_webhook_handler)
 
 
 @app.get("/health")
@@ -115,5 +132,7 @@ app.include_router(movies_router, prefix=API_PREFIX)
 app.include_router(movie_reactions_router, prefix=API_PREFIX)
 app.include_router(movie_comments_router, prefix=API_PREFIX)
 app.include_router(movie_favorites_router, prefix=API_PREFIX)
+app.include_router(movie_purchased_router, prefix=API_PREFIX)
 app.include_router(cart_router, prefix=API_PREFIX)
 app.include_router(orders_router, prefix=API_PREFIX)
+app.include_router(payments_router, prefix=API_PREFIX)

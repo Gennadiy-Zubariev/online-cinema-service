@@ -7,6 +7,7 @@ import src.accounts.models  # noqa: F401
 import src.cart.models  # noqa: F401
 import src.movies.models  # noqa: F401
 import src.orders.models  # noqa: F401
+import src.payments.models  # noqa: F401
 from src.config.settings import get_settings
 from src.database.base import Base
 
