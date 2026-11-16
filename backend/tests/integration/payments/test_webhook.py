@@ -11,6 +11,7 @@ import logging
 import time
 from decimal import Decimal
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 from httpx import AsyncClient, Response
@@ -427,3 +428,107 @@ async def test_webhook_expired_for_missing_order_is_ignored(
 
     assert response.status_code == 200
     assert await stored_payments(db_session) == []
+
+
+# --- confirmation email ---
+
+
+async def test_webhook_completed_sends_confirmation_email(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    send_payment_confirmation_email_mock: MagicMock,
+    user: User,
+    movie: Movie,
+    other_movie: Movie,
+) -> None:
+    """Amount is the one Stripe charged, as a string (Decimal is not JSON)."""
+    order = await save_order(db_session, user, movie, other_movie)
+
+    await send_event(client, checkout_event(COMPLETED, order.id, amount_total=1798))
+
+    send_payment_confirmation_email_mock.delay.assert_called_once_with(
+        user.email, order.id, "17.98"
+    )
+
+
+async def test_webhook_completed_twice_sends_one_email(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    send_payment_confirmation_email_mock: MagicMock,
+    user: User,
+    movie: Movie,
+) -> None:
+    order = await save_order(db_session, user, movie)
+    event = checkout_event(COMPLETED, order.id)
+
+    await send_event(client, event)
+    await send_event(client, event)
+
+    send_payment_confirmation_email_mock.delay.assert_called_once()
+
+
+async def test_webhook_completed_for_canceled_order_sends_email(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    send_payment_confirmation_email_mock: MagicMock,
+    user: User,
+    movie: Movie,
+) -> None:
+    """The money arrived and the movies are granted, so the user is notified."""
+    order = await save_order(db_session, user, movie, status=OrderStatusEnum.CANCELED)
+
+    await send_event(client, checkout_event(COMPLETED, order.id))
+
+    send_payment_confirmation_email_mock.delay.assert_called_once_with(
+        user.email, order.id, "7.99"
+    )
+
+
+@pytest.mark.parametrize(
+    ("event_type", "payment_status"),
+    [(EXPIRED, "unpaid"), (COMPLETED, "unpaid")],
+    ids=["expired", "completed_unpaid"],
+)
+async def test_webhook_without_payment_sends_no_email(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    send_payment_confirmation_email_mock: MagicMock,
+    user: User,
+    movie: Movie,
+    event_type: str,
+    payment_status: str,
+) -> None:
+    order = await save_order(db_session, user, movie)
+
+    await send_event(
+        client, checkout_event(event_type, order.id, payment_status=payment_status)
+    )
+
+    send_payment_confirmation_email_mock.delay.assert_not_called()
+
+
+async def test_webhook_completed_for_missing_order_sends_no_email(
+    client: AsyncClient, send_payment_confirmation_email_mock: MagicMock
+) -> None:
+    await send_event(client, checkout_event(COMPLETED, UNKNOWN_ID))
+
+    send_payment_confirmation_email_mock.delay.assert_not_called()
+
+
+async def test_webhook_invalid_signature_sends_no_email(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    send_payment_confirmation_email_mock: MagicMock,
+    user: User,
+    movie: Movie,
+) -> None:
+    order = await save_order(db_session, user, movie)
+    payload = json.dumps(checkout_event(COMPLETED, order.id)).encode()
+
+    await client.post(
+        WEBHOOK_URL,
+        content=payload,
+        headers={"Stripe-Signature": sign(payload, secret="whsec_forged")},
+    )
+
+    send_payment_confirmation_email_mock.delay.assert_not_called()
