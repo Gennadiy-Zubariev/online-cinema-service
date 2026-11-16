@@ -67,6 +67,8 @@ from src.orders.exceptions import (
     OrderMoviesPurchasedError,
 )
 from src.orders.router import router as orders_router
+from src.payments.exception_handlers import invalid_webhook_handler
+from src.payments.exceptions import InvalidWebhookError
 from src.payments.router import router as payments_router
 from src.storage.client import ensure_bucket_exists
 from src.storage.exception_handlers import (
@@ -114,6 +116,7 @@ app.add_exception_handler(AllMoviesPurchasedError, all_movies_purchased_handler)
 app.add_exception_handler(OrderNotFoundError, order_not_found_handler)
 app.add_exception_handler(OrderNotPendingError, order_not_pending_handler)
 app.add_exception_handler(OrderMoviesPurchasedError, order_movies_purchased_handler)
+app.add_exception_handler(InvalidWebhookError, invalid_webhook_handler)
 
 
 @app.get("/health")
