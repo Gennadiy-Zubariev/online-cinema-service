@@ -26,6 +26,11 @@ AsyncSessionLocal = async_sessionmaker(
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """Yield one session per request.
+
+    Services commit explicitly; an exception leaves the transaction
+    uncommitted and closing the session rolls it back.
+    """
     async with AsyncSessionLocal() as session:
         yield session
 

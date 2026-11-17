@@ -85,6 +85,10 @@ API_PREFIX = "/api/v1"
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Create the S3 bucket on startup if needed.
+
+    ASGITransport in tests does not run lifespan.
+    """
     await run_in_threadpool(ensure_bucket_exists)
     yield
 
@@ -122,6 +126,7 @@ app.add_exception_handler(InvalidWebhookError, invalid_webhook_handler)
 
 @app.get("/health")
 async def health() -> dict[str, str]:
+    """Liveness check for Docker / monitoring; does not touch the DB."""
     return {"status": "ok"}
 
 

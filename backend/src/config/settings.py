@@ -57,6 +57,7 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> URL:
+        """SQLAlchemy URL for psycopg 3; used by both the async and sync engines."""
         return URL.create(
             drivername="postgresql+psycopg",
             username=self.POSTGRES_USER,
@@ -68,11 +69,13 @@ class Settings(BaseSettings):
 
     @property
     def redis_url(self) -> str:
+        """Redis URL for the Celery broker."""
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
 
 
 @lru_cache
 def get_settings() -> Settings:
+    """Return the settings, read from the environment / .env once and cached."""
     return Settings()
 
 

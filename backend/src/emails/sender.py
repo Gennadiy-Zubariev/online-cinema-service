@@ -17,11 +17,18 @@ _jinja_env = Environment(
 
 
 def render_template(template_name: str, **context: object) -> str:
+    """Render an email template from TEMPLATES_DIR (HTML is autoescaped)."""
     template = _jinja_env.get_template(template_name)
     return template.render(**context)
 
 
 def send_email(to: str, subject: str, html_body: str, settings: Settings) -> None:
+    """Send an HTML email over SMTP (sync, with a timeout).
+
+    STARTTLS and login are used only when SMTP_USE_TLS / SMTP_USER are set
+    (Mailpit in dev needs neither). Network errors raise OSError, which the
+    Celery tasks retry.
+    """
     message = EmailMessage()
     message["From"] = settings.EMAIL_FROM
     message["To"] = to

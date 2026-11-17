@@ -10,6 +10,12 @@ from src.tasks.celery_app import celery_app
 
 
 def delete_expired_pending_orders(session: Session, settings: Settings) -> None:
+    """Delete pending orders older than PENDING_ORDER_EXPIRE_DAYS.
+
+    Abandoned orders would otherwise block deleting their movies (RESTRICT).
+    Order items and canceled payments go with them (ON DELETE CASCADE);
+    paid and canceled orders are never touched.
+    """
     cutoff = datetime.now(UTC) - timedelta(days=settings.PENDING_ORDER_EXPIRE_DAYS)
     session.execute(
         delete(Order).where(
@@ -21,5 +27,6 @@ def delete_expired_pending_orders(session: Session, settings: Settings) -> None:
 
 @celery_app.task
 def delete_expired_pending_orders_task() -> None:
+    """Celery beat task (daily): run delete_expired_pending_orders."""
     with SyncSessionLocal() as session:
         delete_expired_pending_orders(session=session, settings=get_settings())
