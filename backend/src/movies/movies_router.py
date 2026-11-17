@@ -32,6 +32,7 @@ router = APIRouter(tags=["movies"])
 
 
 def _to_movie_response(movie: Movie) -> MovieResponse:
+    """Build MovieResponse field by field; the poster key becomes a presigned URL."""
     return MovieResponse(
         id=movie.id,
         uuid=movie.uuid,
@@ -101,6 +102,10 @@ async def get_movie_detail(db: DbSession, movie_id: int) -> MovieDetailResponse:
 
 
 def to_movie_list_item(movie: Movie) -> MovieListItemResponse:
+    """Build a catalog list item; the poster key becomes a presigned URL.
+
+    Also used by favorites and purchased movies.
+    """
     return MovieListItemResponse(
         id=movie.id,
         uuid=movie.uuid,

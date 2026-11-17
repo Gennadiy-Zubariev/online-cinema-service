@@ -11,6 +11,10 @@ from src.movies.models import Movie, MovieReaction, MovieRating
 async def set_movie_reaction(
     db: AsyncSession, user_id: int, movie_id: int, is_like: bool
 ) -> None:
+    """Set like (True) or dislike (False); replaces the previous reaction.
+
+    Atomic upsert (ON CONFLICT DO UPDATE). Raises EntityNotFoundError.
+    """
     if await db.get(Movie, movie_id) is None:
         raise EntityNotFoundError(Movie.__name__)
 
@@ -26,6 +30,7 @@ async def set_movie_reaction(
 
 
 async def delete_movie_reaction(db: AsyncSession, user_id: int, movie_id: int) -> None:
+    """Remove the user's reaction; idempotent, no existence checks."""
     await db.execute(
         delete(MovieReaction).where(
             MovieReaction.user_id == user_id, MovieReaction.movie_id == movie_id
@@ -37,6 +42,10 @@ async def delete_movie_reaction(db: AsyncSession, user_id: int, movie_id: int) -
 async def set_movie_rating(
     db: AsyncSession, user_id: int, movie_id: int, score: int
 ) -> None:
+    """Set the user's 1-10 score; replaces the previous one.
+
+    Atomic upsert (ON CONFLICT DO UPDATE). Raises EntityNotFoundError.
+    """
     if await db.get(Movie, movie_id) is None:
         raise EntityNotFoundError(Movie.__name__)
 
@@ -50,6 +59,7 @@ async def set_movie_rating(
 
 
 async def delete_movie_rating(db: AsyncSession, user_id: int, movie_id: int) -> None:
+    """Remove the user's score; idempotent, no existence checks."""
     await db.execute(
         delete(MovieRating).where(
             MovieRating.user_id == user_id, MovieRating.movie_id == movie_id
@@ -67,6 +77,11 @@ class MovieStats:
 
 
 async def get_movie_stats(db: AsyncSession, movie_id: int) -> MovieStats:
+    """Return likes, dislikes, average rating (1 decimal) and number of ratings.
+
+    Does not check that the movie exists: the caller loads it first.
+    No ratings -> rating is None.
+    """
     reactions = (
         await db.execute(
             select(

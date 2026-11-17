@@ -31,6 +31,10 @@ SORT_COLUMNS = {
 async def _get_named_by_ids(
     db: AsyncSession, model: type[NamedModel], ids: set[int]
 ) -> list[NamedModel]:
+    """Load entities by ids in one query; raise EntityNotFoundError if any is missing.
+
+    An empty set returns [] without a query.
+    """
     if not ids:
         return []
     result = await db.scalars(select(model).where(model.id.in_(ids)))
@@ -47,6 +51,13 @@ async def list_catalog_movies(
     page: int,
     page_size: int,
 ) -> tuple[list[Movie], int]:
+    """Apply catalog filters, search, sorting and pagination to a base query.
+
+    Shared by the catalog, favorites and purchased movies, so all three behave
+    the same. Returns (movies with genres loaded, total matching the filters).
+    Search uses EXISTS for stars / directors (no duplicate movies); id is the
+    second sort key to keep pages stable.
+    """
     if params.year_from is not None:
         stmt = stmt.where(Movie.year >= params.year_from)
     if params.year_to is not None:
@@ -84,6 +95,11 @@ async def create_movie(
     db: AsyncSession,
     data: MovieCreateRequest,
 ) -> Movie:
+    """Create a movie with its certification, genres, directors and stars.
+
+    Raises EntityNotFoundError for an unknown related id and
+    EntityAlreadyExistsError for a duplicate (name, year, time).
+    """
     certification = await get_named(
         db=db, model=Certification, entity_id=data.certification_id
     )
@@ -103,6 +119,7 @@ async def create_movie(
 
 
 async def get_movie(db: AsyncSession, movie_id: int) -> Movie:
+    """Return a movie with all relationships loaded; raises EntityNotFoundError."""
     movie = await db.scalar(
         select(Movie)
         .where(Movie.id == movie_id)
@@ -121,6 +138,7 @@ async def get_movie(db: AsyncSession, movie_id: int) -> Movie:
 async def list_movies(
     db: AsyncSession, params: MovieCatalogQuery, page: int, page_size: int
 ) -> tuple[list[Movie], int]:
+    """Return (catalog page, total) for the public catalog."""
     return await list_catalog_movies(
         db=db, stmt=select(Movie), params=params, page=page, page_size=page_size
     )
@@ -129,6 +147,12 @@ async def list_movies(
 async def update_movie(
     db: AsyncSession, movie_id: int, data: MovieUpdateRequest
 ) -> Movie:
+    """Partially update a movie; id lists replace the related sets.
+
+    All related entities are loaded before setattr: otherwise autoflush sends
+    the UPDATE early and a duplicate escapes commit_unique as a 500.
+    Raises EntityNotFoundError / EntityAlreadyExistsError.
+    """
     movie = await get_movie(db=db, movie_id=movie_id)
 
     if data.certification_id is not None:
@@ -154,6 +178,11 @@ async def update_movie(
 
 
 async def delete_movie(db: AsyncSession, movie_id: int) -> None:
+    """Delete a movie, then its poster file.
+
+    Raises EntityNotFoundError, or EntityInUseError (409) if the movie is in
+    an order or purchased (RESTRICT). The poster is deleted only after commit.
+    """
     movie = await db.get(Movie, movie_id)
     if movie is None:
         raise EntityNotFoundError(Movie.__name__)
@@ -173,6 +202,11 @@ async def delete_movie(db: AsyncSession, movie_id: int) -> None:
 async def update_movie_poster(
     db: AsyncSession, movie_id: int, data: bytes, content_type: str | None
 ) -> Movie:
+    """Validate and upload a new poster, then delete the old file.
+
+    The image is validated before the DB lookup. Order upload -> commit ->
+    delete old: a failure leaves at most an orphan file in S3.
+    """
     content_type, extension = validate_image(data, content_type, MAX_POSTER_SIZE)
     movie = await get_movie(db=db, movie_id=movie_id)
 

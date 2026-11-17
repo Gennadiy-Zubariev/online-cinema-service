@@ -7,12 +7,14 @@ from src.movies.schemas import MovieCatalogQuery
 
 
 async def is_movie_purchased(db: AsyncSession, user_id: int, movie_id: int) -> bool:
+    """Return True if the user already owns the movie."""
     return await db.get(PurchasedMovie, (user_id, movie_id)) is not None
 
 
 async def get_purchased_movie_ids(
     db: AsyncSession, user_id: int, movie_ids: list[int]
 ) -> set[int]:
+    """Return which of the given movies the user already owns (one IN query)."""
     result = await db.scalars(
         select(PurchasedMovie.movie_id).where(
             PurchasedMovie.user_id == user_id,
@@ -29,6 +31,7 @@ async def list_purchased_movies(
     page: int,
     page_size: int,
 ) -> tuple[list[Movie], int]:
+    """Return (user's purchased movies page, total) with catalog filters and sorting."""
     stmt = (
         select(Movie)
         .join(PurchasedMovie, PurchasedMovie.movie_id == Movie.id)

@@ -100,6 +100,10 @@ class MovieUpdateRequest(BaseModel):
     )
     @classmethod
     def reject_null(cls, value: object) -> object:
+        """Reject an explicit null for NOT NULL fields; omitted fields still pass.
+
+        Validators do not run on defaults, so None means "sent as null".
+        """
         if value is None:
             raise ValueError("Field cannot be null")
         return value

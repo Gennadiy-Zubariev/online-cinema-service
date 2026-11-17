@@ -22,6 +22,7 @@ router = APIRouter(tags=["movies"])
 
 
 def _to_comment_response(comment: MovieComment, likes: int) -> CommentResponse:
+    """Build CommentResponse with an already counted number of likes."""
     return CommentResponse(
         id=comment.id,
         user_id=comment.user_id,
@@ -36,6 +37,7 @@ def _to_comment_response(comment: MovieComment, likes: int) -> CommentResponse:
 def _to_comment_with_replies(
     comment: MovieComment, likes: dict[int, int]
 ) -> CommentWithRepliesResponse:
+    """Build a top-level comment with its replies (likes from count_comment_likes)."""
     return CommentWithRepliesResponse(
         **_to_comment_response(comment, likes.get(comment.id, 0)).model_dump(),
         replies=[
