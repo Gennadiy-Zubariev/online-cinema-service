@@ -14,6 +14,11 @@ async def _get_or_create_cart(
     db: AsyncSession,
     user_id: int,
 ) -> Cart:
+    """Return the user's cart, creating it on first use.
+
+    INSERT ... ON CONFLICT DO NOTHING + SELECT: no race between two requests.
+    Does not commit: the caller owns the transaction.
+    """
     await db.execute(
         insert(Cart)
         .values(user_id=user_id)
@@ -28,6 +33,11 @@ async def add_movie_to_cart(
     user_id: int,
     movie_id: int,
 ) -> None:
+    """Add a movie to the user's cart; idempotent.
+
+    Raises EntityNotFoundError for an unknown movie and
+    MovieAlreadyPurchasedError if the user already owns it.
+    """
     if await db.get(Movie, movie_id) is None:
         raise EntityNotFoundError(Movie.__name__)
     if await is_movie_purchased(db=db, user_id=user_id, movie_id=movie_id):
@@ -42,6 +52,11 @@ async def add_movie_to_cart(
 
 
 async def remove_movie_from_cart(db: AsyncSession, user_id: int, movie_id: int) -> None:
+    """Remove a movie from the cart; idempotent.
+
+    Does not create a cart: without one the subquery is NULL and nothing
+    is deleted.
+    """
     cart_id = select(Cart.id).where(Cart.user_id == user_id).scalar_subquery()
     await db.execute(
         delete(CartItem).where(
@@ -52,6 +67,10 @@ async def remove_movie_from_cart(db: AsyncSession, user_id: int, movie_id: int) 
 
 
 async def list_cart_movies(db: AsyncSession, user_id: int) -> list[Movie]:
+    """Return the movies in the user's cart with genres, in the order added.
+
+    No cart -> empty list (the cart is not created).
+    """
     result = await db.scalars(
         select(Movie)
         .join(CartItem, CartItem.movie_id == Movie.id)
@@ -64,6 +83,10 @@ async def list_cart_movies(db: AsyncSession, user_id: int) -> list[Movie]:
 
 
 async def clear_cart(db: AsyncSession, user_id: int) -> None:
+    """Remove all movies from the cart; the cart itself stays. Idempotent.
+
+    Commits: do not call it inside another service's transaction.
+    """
     cart_id = select(Cart.id).where(Cart.user_id == user_id).scalar_subquery()
     await db.execute(delete(CartItem).where(CartItem.cart_id == cart_id))
     await db.commit()
