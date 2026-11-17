@@ -284,6 +284,10 @@ async def list_all_users(db: DbSession, pagination: Pagination) -> UserListRespo
 
 
 def _to_profile_response(profile: UserProfile | None) -> ProfileResponse:
+    """Build ProfileResponse; turn the avatar S3 key into a presigned URL.
+
+    No profile row yet -> empty response (the profile is created lazily).
+    """
     if profile is None:
         return ProfileResponse()
     return ProfileResponse(
