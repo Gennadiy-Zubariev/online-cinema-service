@@ -11,6 +11,12 @@ from src.movies.schemas import CommentCreateRequest
 async def create_comment(
     db: AsyncSession, user_id: int, movie_id: int, data: CommentCreateRequest
 ) -> MovieComment:
+    """Create a comment, or a reply when parent_id is set.
+
+    Raises EntityNotFoundError for an unknown movie, or a parent that is missing
+    or belongs to another movie; NestedReplyError for a reply to a reply
+    (only one level of replies).
+    """
     if await db.get(Movie, movie_id) is None:
         raise EntityNotFoundError(Movie.__name__)
     if data.parent_id is not None:
@@ -30,6 +36,11 @@ async def create_comment(
 async def list_comments(
     db: AsyncSession, movie_id: int, page: int, page_size: int
 ) -> tuple[list[MovieComment], int]:
+    """Return (top-level comments newest first with replies loaded, total).
+
+    Raises EntityNotFoundError for an unknown movie. total counts only
+    top-level comments.
+    """
     if await db.get(Movie, movie_id) is None:
         raise EntityNotFoundError(Movie.__name__)
     stmt = select(MovieComment).where(
@@ -46,6 +57,7 @@ async def list_comments(
 
 
 async def set_comment_like(db: AsyncSession, user_id: int, comment_id: int) -> None:
+    """Like a comment; idempotent. Raises EntityNotFoundError."""
     if await db.get(MovieComment, comment_id) is None:
         raise EntityNotFoundError("Comment")
 
@@ -56,6 +68,7 @@ async def set_comment_like(db: AsyncSession, user_id: int, comment_id: int) -> N
 
 
 async def delete_comment_like(db: AsyncSession, user_id: int, comment_id: int) -> None:
+    """Remove the user's like; idempotent, no existence checks."""
     await db.execute(
         delete(CommentLike).where(
             CommentLike.user_id == user_id, CommentLike.comment_id == comment_id
@@ -67,6 +80,10 @@ async def delete_comment_like(db: AsyncSession, user_id: int, comment_id: int) -
 async def count_comment_likes(
     db: AsyncSession, comment_ids: list[int]
 ) -> dict[int, int]:
+    """Return {comment_id: likes} in one GROUP BY query.
+
+    Comments without likes are absent from the result: use .get(id, 0).
+    """
     if not comment_ids:
         return {}
     result = await db.execute(

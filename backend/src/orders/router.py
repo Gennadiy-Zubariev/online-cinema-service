@@ -39,7 +39,7 @@ async def add_order(db: DbSession, current_user: CurrentUser) -> OrderCreateResp
 
 
 @router.get("", status_code=status.HTTP_200_OK, response_model=OrderListResponse)
-async def get_orders_list(
+async def get_order_list(
     db: DbSession, current_user: CurrentUser, pagination: Pagination
 ) -> OrderListResponse:
     """List the current user's orders, newest first.

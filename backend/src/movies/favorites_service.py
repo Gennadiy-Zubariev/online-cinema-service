@@ -9,6 +9,10 @@ from src.movies.schemas import MovieCatalogQuery
 
 
 async def add_favorite_movie(db: AsyncSession, user_id: int, movie_id: int) -> None:
+    """Add a movie to favorites; idempotent (added_at is not changed).
+
+    Raises EntityNotFoundError.
+    """
     if await db.get(Movie, movie_id) is None:
         raise EntityNotFoundError(Movie.__name__)
 
@@ -19,6 +23,7 @@ async def add_favorite_movie(db: AsyncSession, user_id: int, movie_id: int) -> N
 
 
 async def remove_favorite_movie(db: AsyncSession, user_id: int, movie_id: int) -> None:
+    """Remove a movie from favorites; idempotent, no existence checks."""
     await db.execute(
         delete(FavoriteMovie).where(
             FavoriteMovie.user_id == user_id, FavoriteMovie.movie_id == movie_id
@@ -34,6 +39,7 @@ async def list_favorite_movies(
     page: int,
     page_size: int,
 ) -> tuple[list[Movie], int]:
+    """Return (user's favorite movies page, total) with catalog filters and sorting."""
     stmt = (
         select(Movie)
         .join(FavoriteMovie, FavoriteMovie.movie_id == Movie.id)

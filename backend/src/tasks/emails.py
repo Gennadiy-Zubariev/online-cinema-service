@@ -5,6 +5,7 @@ from src.tasks.celery_app import celery_app
 
 @celery_app.task(autoretry_for=(OSError,), retry_backoff=True, max_retries=5)
 def send_activation_email(email: str, token: str) -> None:
+    """Send the account activation link; retried on SMTP / network errors."""
     settings = get_settings()
     activation_link = f"{settings.FRONTEND_URL}/activate?token={token}"
     html_body = render_template(
@@ -17,6 +18,7 @@ def send_activation_email(email: str, token: str) -> None:
 
 @celery_app.task(autoretry_for=(OSError,), retry_backoff=True, max_retries=5)
 def send_password_reset_email(email: str, token: str) -> None:
+    """Send the password reset link; retried on SMTP / network errors."""
     settings = get_settings()
     reset_link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
     html_body = render_template(
@@ -29,6 +31,10 @@ def send_password_reset_email(email: str, token: str) -> None:
 
 @celery_app.task(autoretry_for=(OSError,), retry_backoff=True, max_retries=5)
 def send_payment_confirmation_email(email: str, order_id: int, amount: str) -> None:
+    """Send the payment confirmation; retried on SMTP / network errors.
+
+    amount is a string: Celery serializes arguments as JSON (no Decimal).
+    """
     settings = get_settings()
     purchased_link = f"{settings.FRONTEND_URL}/purchased"
     html_body = render_template(

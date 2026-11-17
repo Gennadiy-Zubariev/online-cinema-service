@@ -2,6 +2,10 @@ import re
 
 
 def validate_password_strength(password: str) -> str:
+    """Require an uppercase and a lowercase letter, a digit and a special character.
+
+    Raises ValueError (Pydantic turns it into 422); returns the password unchanged.
+    """
     if not re.search(r"[A-Z]", password):
         raise ValueError("Password must contain at least one uppercase letter")
     if not re.search(r"[a-z]", password):

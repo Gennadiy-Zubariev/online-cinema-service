@@ -14,6 +14,14 @@ async def create_order(
     db: AsyncSession,
     user_id: int,
 ) -> tuple[Order, list[Movie]]:
+    """Create a pending order from the cart; return (order, excluded movies).
+
+    Raises EmptyCartError or AllMoviesPurchasedError (nothing is changed).
+    Already purchased movies are excluded and reported. price_at_order is a
+    snapshot of the current price. Only the cart items read here are removed
+    (ordered and purchased ones), so a movie added meanwhile from another tab
+    stays. One commit for the whole operation.
+    """
     cart_movies = await list_cart_movies(db=db, user_id=user_id)
     if not cart_movies:
         raise EmptyCartError()
@@ -50,6 +58,7 @@ async def create_order(
 async def list_orders(
     db: AsyncSession, user_id: int, page: int, page_size: int
 ) -> tuple[list[Order], int]:
+    """Return (user's orders newest first with items and movies loaded, total)."""
     stmt = select(Order).where(Order.user_id == user_id)
     total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
     result = await db.scalars(

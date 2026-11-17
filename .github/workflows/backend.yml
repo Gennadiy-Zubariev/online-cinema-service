@@ -1,0 +1,73 @@
+name: Backend
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      POSTGRES_USER: cinema
+      POSTGRES_PASSWORD: cinema
+      POSTGRES_DB: cinema
+      POSTGRES_HOST: localhost
+      COOKIE_SECURE: "false"
+      SECRET_KEY: ci-test-secret-key-not-for-production-use
+      S3_ACCESS_KEY: test
+      S3_SECRET_KEY: test
+      STRIPE_SECRET_KEY: sk_test_ci
+      STRIPE_WEBHOOK_SECRET: whsec_test_ci
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: cinema
+          POSTGRES_PASSWORD: cinema
+          POSTGRES_DB: cinema_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cinema"
+          --health-interval 5s                                                                                                                                                                                                            
+          --health-timeout 5s                                                                                                                                                                                                             
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Poetry
+        run: pipx install poetry==2.5.1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: poetry
+          cache-dependency-path: backend/poetry.lock
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Lint (flake8)
+        run: poetry run flake8 .
+
+      - name: Check formatting (black)
+        run: poetry run black --check .
+
+      - name: Type check (mypy)
+        run: poetry run mypy .
+
+      - name: Tests (pytest + coverage)
+        run: poetry run pytest --cov --cov-fail-under=95

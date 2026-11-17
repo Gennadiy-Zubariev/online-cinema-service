@@ -11,6 +11,7 @@ TOKEN_MODELS = (ActivationToken, PasswordResetToken, RefreshToken)
 
 
 def delete_expired_tokens(session: Session) -> None:
+    """Delete expired activation, password reset and refresh tokens; one commit."""
     now = datetime.now(UTC)
     for token_model in TOKEN_MODELS:
         session.execute(delete(token_model).where(token_model.expires_at < now))
@@ -19,5 +20,6 @@ def delete_expired_tokens(session: Session) -> None:
 
 @celery_app.task
 def delete_expired_tokens_task() -> None:
+    """Celery beat task (hourly): run delete_expired_tokens in a sync session."""
     with SyncSessionLocal() as session:
         delete_expired_tokens(session=session)

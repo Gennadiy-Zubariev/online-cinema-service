@@ -57,6 +57,12 @@ MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2 MB
 async def register_user(
     db: AsyncSession, data: UserRegisterRequest, settings: Settings
 ) -> User:
+    """Create an inactive user in the USER group and send the activation email.
+
+    Raises UserAlreadyExistsError if the email is taken, including a concurrent
+    registration caught as UniqueViolation on commit. The email task is queued
+    only after commit.
+    """
     existing_user = await db.scalar(select(User).where(User.email == data.email))
     if existing_user is not None:
         raise UserAlreadyExistsError(data.email)
@@ -90,6 +96,11 @@ async def register_user(
 
 
 async def activate_account(db: AsyncSession, token: str) -> User:
+    """Activate the user by a raw activation token and delete the token.
+
+    Raises InvalidActivationTokenError or ActivationTokenExpiredError.
+    An expired token is kept: resending replaces it, celery-beat cleans up the rest.
+    """
     hashed_token = hash_token(token)
     activation_token = await db.scalar(
         select(ActivationToken)
@@ -112,6 +123,12 @@ async def resend_activation_token(
     data: ResendActivationRequest,
     settings: Settings,
 ) -> None:
+    """Replace the activation token and send the email again.
+
+    Unknown or already active email -> silent return (no user enumeration).
+    The old token is flushed out first: otherwise the unit of work inserts
+    the new one before deleting the old one and hits the unique user_id.
+    """
     user = await db.scalar(
         select(User)
         .where(User.email == data.email)
@@ -138,6 +155,12 @@ async def login_user(
     data: LoginRequest,
     settings: Settings,
 ) -> tuple[str, str]:
+    """Check credentials and return (access token, refresh token).
+
+    Raises InvalidCredentialsError for an unknown email or a wrong password,
+    UserNotActiveError only after the password matched. Stores the refresh
+    token hash; tokens of other devices are kept.
+    """
     user = await db.scalar(select(User).where(User.email == data.email))
     if user is None:
         raise InvalidCredentialsError()
@@ -164,6 +187,7 @@ async def login_user(
 
 
 async def logout_user(db: AsyncSession, refresh_token: str) -> None:
+    """Revoke one refresh token by its hash; unknown tokens are ignored."""
     await db.execute(
         delete(RefreshToken).where(RefreshToken.token_hash == hash_token(refresh_token))
     )
@@ -173,6 +197,10 @@ async def logout_user(db: AsyncSession, refresh_token: str) -> None:
 async def refresh_access_token(
     db: AsyncSession, refresh_token: str, settings: Settings
 ) -> str:
+    """Return a new access token for a valid, not revoked refresh token.
+
+    Raises InvalidRefreshTokenError. The refresh token is not rotated.
+    """
     user_id = decode_refresh_token(token=refresh_token, settings=settings)
     token_id = await db.scalar(
         select(RefreshToken.id).where(
@@ -189,6 +217,10 @@ async def change_user_password(
     current_user: User,
     data: ChangePasswordRequest,
 ) -> None:
+    """Set a new password after checking the old one.
+
+    Raises IncorrectPasswordError (400, not 401: the access token is valid).
+    """
     is_old_password_valid = await run_in_threadpool(
         verify_password, data.old_password, current_user.hashed_password
     )
@@ -206,6 +238,11 @@ async def request_password_reset(
     data: PasswordResetRequest,
     settings: Settings,
 ) -> None:
+    """Create a password reset token and email it.
+
+    Unknown or inactive email -> silent return (no user enumeration).
+    A previous token is replaced (flushed out first, as in resending activation).
+    """
     user = await db.scalar(
         select(User)
         .where(User.email == data.email)
@@ -228,6 +265,10 @@ async def request_password_reset(
 
 
 async def reset_password(db: AsyncSession, data: PasswordResetCompleteRequest) -> None:
+    """Set a new password by a raw reset token; the token is single-use.
+
+    Raises InvalidPasswordResetTokenError for unknown and expired tokens alike.
+    """
     reset_token = await db.scalar(
         select(PasswordResetToken)
         .where(PasswordResetToken.token_hash == hash_token(data.token))
@@ -246,6 +287,7 @@ async def reset_password(db: AsyncSession, data: PasswordResetCompleteRequest) -
 async def change_user_group(
     db: AsyncSession, user_id: int, group_name: UserGroupEnum
 ) -> None:
+    """Move the user to another group; raises UserNotFoundError."""
     user = await db.get(User, user_id)
     if user is None:
         raise UserNotFoundError()
@@ -256,6 +298,10 @@ async def change_user_group(
 
 
 async def activate_user_manually(db: AsyncSession, user_id: int) -> None:
+    """Activate the user (admin action) and delete the activation token.
+
+    Idempotent for an active user; raises UserNotFoundError.
+    """
     user = await db.scalar(
         select(User)
         .where(User.id == user_id)
@@ -286,12 +332,17 @@ async def list_users(
 
 
 async def get_user_profile(db: AsyncSession, user_id: int) -> UserProfile | None:
+    """Return the user's profile, or None if it has not been created yet."""
     return await db.scalar(select(UserProfile).where(UserProfile.user_id == user_id))
 
 
 async def update_user_profile(
     db: AsyncSession, user_id: int, data: ProfileUpdateRequest
 ) -> UserProfile:
+    """Create or partially update the user's profile.
+
+    Only fields sent in the request change; an explicit null clears a field.
+    """
     profile = await get_user_profile(db=db, user_id=user_id)
     if profile is None:
         profile = UserProfile(user_id=user_id)
@@ -307,6 +358,12 @@ async def update_user_profile(
 async def update_user_avatar(
     db: AsyncSession, user_id: int, data: bytes, content_type: str | None
 ) -> UserProfile:
+    """Validate and upload a new avatar, then delete the old file.
+
+    Raises UnsupportedImageTypeError / ImageTooLargeError before touching the DB.
+    Order upload -> commit -> delete old: a failure leaves at most an orphan
+    file in S3, never a profile pointing to a missing one.
+    """
     content_type, extension = validate_image(data, content_type, MAX_AVATAR_SIZE)
 
     profile = await get_user_profile(db=db, user_id=user_id)
