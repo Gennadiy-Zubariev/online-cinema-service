@@ -34,6 +34,11 @@ async def _record_payment(
     amount: Decimal,
     status: PaymentStatusEnum,
 ) -> bool:
+    """Insert a payment for a Stripe session; return False if already recorded.
+
+    ON CONFLICT DO NOTHING on external_payment_id makes webhook redeliveries
+    idempotent, also for concurrent deliveries. Does not commit.
+    """
     payment_id = await db.scalar(
         insert(Payment)
         .values(
@@ -52,6 +57,13 @@ async def _record_payment(
 async def _complete_order_payment(
     db: AsyncSession, order_id: int, session_id: str, amount: Decimal
 ) -> None:
+    """Record a successful payment, mark the order paid and grant its movies.
+
+    Payment, status and purchased movies are written in one commit; the
+    confirmation email is queued after it, only for a new payment.
+    A missing or non-pending order is logged ("refund manually") instead of
+    raising: money was charged, and a 5xx would only make Stripe retry.
+    """
     order = await db.get(Order, order_id)
     if order is None:
         logger.error(
@@ -92,6 +104,10 @@ async def _complete_order_payment(
 async def _cancel_order_payment(
     db: AsyncSession, order_id: int, session_id: str, amount: Decimal
 ) -> None:
+    """Record a canceled payment for an expired session; the order stays pending.
+
+    A missing order is ignored: no money was charged.
+    """
     order = await db.get(Order, order_id)
     if order is None:
         return
@@ -100,6 +116,14 @@ async def _cancel_order_payment(
 
 
 async def start_checkout(db: AsyncSession, user_id: int, order_id: int) -> str:
+    """Create a Stripe Checkout Session for the user's pending order; return its URL.
+
+    Raises OrderNotFoundError (also for another user's order) and
+    OrderNotPendingError. Movies bought meanwhile are removed from the order
+    and the total is recalculated; if all are bought, the order is canceled
+    and committed before OrderMoviesPurchasedError is raised. Stripe is called
+    after commit, so the network call does not hold the transaction.
+    """
     order = await db.scalar(
         select(Order)
         .where(Order.id == order_id, Order.user_id == user_id)
@@ -134,6 +158,12 @@ async def start_checkout(db: AsyncSession, user_id: int, order_id: int) -> str:
 
 
 async def process_webhook_event(db: AsyncSession, event: Event) -> None:
+    """Handle a verified Stripe event: completed or expired checkout session.
+
+    Other events and sessions without our order_id in metadata are ignored.
+    A completed session is processed only when payment_status is "paid".
+    Stripe objects are turned into plain values here.
+    """
     if event.type not in (CHECKOUT_COMPLETED, CHECKOUT_EXPIRED):
         return
     session = event.data.object
