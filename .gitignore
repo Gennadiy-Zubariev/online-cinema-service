@@ -220,7 +220,3 @@ __marimo__/
 .streamlit/secrets.toml
 
 CLAUDE.md
-
-# Seed posters (copyrighted images, local only)
-backend/commands/seed_posters/*
-!backend/commands/seed_posters/.gitkeep
