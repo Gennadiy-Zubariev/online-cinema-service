@@ -24,9 +24,9 @@ const EXACT: Record<string, string> = {
   'Image must be a JPEG, PNG or WebP image.': 'Підходять лише зображення JPEG, PNG або WebP.',
   'Replies to replies are not allowed.': 'Відповісти можна лише на коментар, не на відповідь.',
   'Password must contain at least one uppercase letter':
-    'Пароль має містити хоча б одну велику літеру.',
+    'Пароль має містити хоча б одну велику латинську літеру (A–Z).',
   'Password must contain at least one lowercase letter':
-    'Пароль має містити хоча б одну малу літеру.',
+    'Пароль має містити хоча б одну малу латинську літеру (a–z).',
   'Password must contain at least one digit': 'Пароль має містити хоча б одну цифру.',
   'Password must contain at least one special character':
     'Пароль має містити хоча б один спецсимвол.',
