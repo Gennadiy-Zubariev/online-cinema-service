@@ -135,6 +135,13 @@ order stays unpaid on the site.
 
 ![Swagger](docs/screenshots/swagger.png)
 
+## Project management
+
+The work was planned and tracked on a Trello board: one card per step, labeled by
+module (Accounts, Movies, Tests, Frontend, …), moved ToDo → In progress → Done.
+
+![Trello board](docs/screenshots/trello.png)
+
 ## Project structure
 
 ```
