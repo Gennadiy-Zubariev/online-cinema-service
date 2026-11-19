@@ -77,7 +77,6 @@ function ProfileMenu() {
             <>
               <p className={styles.menuEmail}>{profile?.email}</p>
               <Link to="/account">Кабінет</Link>
-              <Link to="/account?tab=purchased">Придбані фільми</Link>
               <button type="button" onClick={() => void handleLogout()}>
                 Вийти
               </button>
