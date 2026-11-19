@@ -1,0 +1,14 @@
+/* Extra bottom gap: the hover panel hangs below the poster. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 28px 18px;
+  padding-bottom: 72px;
+}
+
+@media (max-width: 560px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    padding-bottom: 0;
+  }
+}

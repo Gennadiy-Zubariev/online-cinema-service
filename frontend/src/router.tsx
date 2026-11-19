@@ -5,6 +5,8 @@ import { ActivatePage } from './pages/ActivatePage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
+import { MovieDetailPage } from './pages/MovieDetailPage'
+import { MoviesPage } from './pages/MoviesPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ResetPasswordPage } from './pages/ResetPasswordPage'
@@ -16,6 +18,8 @@ export const router = createBrowserRouter([
     element: <Layout />,
     children: [
       { path: '/', element: <HomePage /> },
+      { path: '/movies', element: <MoviesPage /> },
+      { path: '/movies/:movieId', element: <MovieDetailPage /> },
       { path: '/login', element: <LoginPage /> },
       { path: '/register', element: <RegisterPage /> },
       { path: '/activate', element: <ActivatePage /> },

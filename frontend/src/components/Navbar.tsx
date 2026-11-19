@@ -10,10 +10,9 @@ function navClass({ isActive }: { isActive: boolean }) {
   return isActive ? `${styles.link} ${styles.linkActive}` : styles.link
 }
 
-function SearchForm() {
+function SearchForm({ initialText }: { initialText: string }) {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const [text, setText] = useState(searchParams.get('search') ?? '')
+  const [text, setText] = useState(initialText)
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -98,6 +97,8 @@ function ProfileMenu() {
 export function Navbar() {
   const { isModerator } = useAuth()
   const { cartItems } = useLibrary()
+  const [searchParams] = useSearchParams()
+  const search = searchParams.get('search') ?? ''
 
   return (
     <header className={styles.header}>
@@ -121,7 +122,8 @@ export function Navbar() {
             </NavLink>
           )}
         </div>
-        <SearchForm />
+        {/* key: the field follows the URL (e.g. after "reset search") */}
+        <SearchForm key={search} initialText={search} />
         <div className={styles.actions}>
           <Link to="/cart" className={styles.iconButton} aria-label="Корзина">
             <CartIcon />

@@ -1,0 +1,117 @@
+.card {
+  position: relative;
+  display: block;
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  transition:
+    transform 0.25s ease,
+    z-index 0s 0.25s;
+}
+
+.card:hover,
+.card:focus-visible {
+  z-index: 5;
+  transform: scale(1.08);
+  text-decoration: none;
+  transition: transform 0.25s ease;
+}
+
+.posterWrap {
+  position: relative;
+}
+
+/* Hidden under the poster; slides out on hover. */
+.panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% - 6px);
+  padding: 12px 12px 14px;
+  background: var(--surface);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  box-shadow: 0 18px 32px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.card:hover .panel,
+.card:focus-visible .panel {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.title {
+  margin: 0 0 4px;
+  font-size: 0.92rem;
+}
+
+.meta,
+.extra,
+.genres {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.extra {
+  display: flex;
+  justify-content: space-between;
+  margin: 6px 0;
+}
+
+.imdb {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.price {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.purchased {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--success);
+  color: #08140e;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+/* "Film strip" in the corner - the movie is in favorites. */
+.favorite {
+  position: absolute;
+  top: 0;
+  right: 10px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 28px;
+  height: 36px;
+  padding-bottom: 6px;
+  background: var(--accent);
+  color: var(--accent-text);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%);
+}
+
+@media (hover: none) {
+  .panel {
+    position: static;
+    opacity: 1;
+    transform: none;
+    box-shadow: none;
+    background: none;
+    padding: 8px 2px 0;
+  }
+
+  .card:hover {
+    transform: none;
+  }
+}

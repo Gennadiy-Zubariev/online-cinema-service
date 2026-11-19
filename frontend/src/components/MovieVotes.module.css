@@ -1,0 +1,67 @@
+.votes {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.heading {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.average {
+  color: var(--accent);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.stars {
+  display: flex;
+}
+
+.stars button {
+  padding: 2px;
+  border: none;
+  background: none;
+  color: var(--border);
+  cursor: pointer;
+}
+
+.stars .starOn {
+  color: var(--accent);
+}
+
+.stars .starOn svg {
+  fill: currentColor;
+}
+
+.linkButton {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.875rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.linkButton:hover {
+  color: var(--text);
+}
+
+.message {
+  margin: 0;
+  color: var(--success);
+  font-size: 0.9rem;
+}

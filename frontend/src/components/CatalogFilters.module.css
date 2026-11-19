@@ -1,0 +1,38 @@
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+.count {
+  font-size: 0.75rem;
+  opacity: 0.65;
+}
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ranges {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ranges fieldset {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.ranges legend {
+  margin-bottom: 6px;
+  font-size: 0.875rem;
+  color: var(--muted);
+}

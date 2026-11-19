@@ -1,0 +1,23 @@
+.top {
+  margin-bottom: 24px;
+  padding: 24px 24px 0;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(240, 180, 60, 0.08), transparent 70%);
+}
+
+.top > div {
+  grid-template-columns: repeat(8, 1fr);
+  padding-bottom: 28px;
+}
+
+@media (max-width: 1100px) {
+  .top > div {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .top > div {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
