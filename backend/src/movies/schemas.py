@@ -163,7 +163,7 @@ class MovieCatalogQuery(BaseModel):
     imdb_min: ImdbRating | None = None
     imdb_max: ImdbRating | None = None
     genre_id: int | None = None
-    sort_by: Literal["id", "price", "year", "votes"] = "id"
+    sort_by: Literal["id", "price", "year", "votes", "imdb"] = "id"
     order: Literal["asc", "desc"] = "asc"
     search: SearchText | None = None
 
@@ -189,6 +189,7 @@ class CommentResponse(BaseModel):
     text: str
     created_at: datetime
     likes: int
+    author_name: str | None
 
     model_config = ConfigDict(from_attributes=True)
 

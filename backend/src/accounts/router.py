@@ -4,7 +4,7 @@ from fastapi import APIRouter, Response, status, Cookie, Depends, UploadFile
 
 from src.accounts.dependencies import CurrentUser, get_current_admin
 from src.accounts.exceptions import InvalidRefreshTokenError
-from src.accounts.models import User, UserProfile
+from src.accounts.models import User, UserGroupEnum, UserProfile
 from src.accounts.schemas import (
     UserResponse,
     UserRegisterRequest,
@@ -283,14 +283,17 @@ async def list_all_users(db: DbSession, pagination: Pagination) -> UserListRespo
     )
 
 
-def _to_profile_response(profile: UserProfile | None) -> ProfileResponse:
+def _to_profile_response(user: User, profile: UserProfile | None) -> ProfileResponse:
     """Build ProfileResponse; turn the avatar S3 key into a presigned URL.
 
-    No profile row yet -> empty response (the profile is created lazily).
+    `email` and `group` come from the user (the frontend has no other way to get
+    them). No profile row yet -> profile fields are empty (created lazily).
     """
     if profile is None:
-        return ProfileResponse()
+        return ProfileResponse(email=user.email, group=UserGroupEnum(user.group.name))
     return ProfileResponse(
+        email=user.email,
+        group=UserGroupEnum(user.group.name),
         first_name=profile.first_name,
         last_name=profile.last_name,
         gender=profile.gender,
@@ -311,7 +314,7 @@ async def get_profile(db: DbSession, current_user: CurrentUser) -> ProfileRespon
     Returns an empty profile (all fields null) if it was never filled in.
     """
     profile = await get_user_profile(db=db, user_id=current_user.id)
-    return _to_profile_response(profile)
+    return _to_profile_response(current_user, profile)
 
 
 @router.patch(
@@ -328,7 +331,7 @@ async def update_profile(
     The profile is created on the first update.
     """
     profile = await update_user_profile(db=db, user_id=current_user.id, data=data)
-    return _to_profile_response(profile)
+    return _to_profile_response(current_user, profile)
 
 
 @router.put(
@@ -348,4 +351,4 @@ async def update_profile_avatar(
     profile = await update_user_avatar(
         db=db, user_id=current_user.id, data=data, content_type=file.content_type
     )
-    return _to_profile_response(profile)
+    return _to_profile_response(current_user, profile)

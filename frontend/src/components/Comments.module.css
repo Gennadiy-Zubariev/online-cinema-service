@@ -1,0 +1,92 @@
+.section {
+  max-width: 760px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.form textarea {
+  resize: vertical;
+}
+
+.formButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.comment {
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.meta {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.meta time {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.text {
+  margin: 0 0 8px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  gap: 16px;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.action:hover:not(:disabled) {
+  color: var(--accent);
+}
+
+.action:disabled {
+  cursor: default;
+}
+
+/* Replies hang under their comment with a line on the left. */
+.replies {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0 0 20px;
+  padding-left: 16px;
+  border-left: 2px solid var(--border);
+}
+
+.replies:empty {
+  display: none;
+}
+
+.replies .form {
+  margin: 0;
+}

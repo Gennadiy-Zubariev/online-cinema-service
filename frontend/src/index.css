@@ -1,0 +1,258 @@
+/* Design tokens: one place for colors, fonts and radii. */
+:root {
+  --bg: #10141f;
+  --surface: #181d2b;
+  --surface-2: #232a3d;
+  --border: #2e3650;
+  --text: #ece8df;
+  --muted: #8e95a8;
+  --accent: #f0b43c;
+  --accent-hover: #ffc75c;
+  --accent-text: #1a1406;
+  --danger: #e0574f;
+  --success: #47b881;
+
+  --font-display: 'Unbounded', system-ui, sans-serif;
+  --font-body: 'Onest', system-ui, sans-serif;
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --page-width: 1320px;
+
+  color-scheme: dark;
+  font: 16px/1.5 var(--font-body);
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  line-height: 1.2;
+  margin: 0 0 0.5em;
+  letter-spacing: -0.02em;
+}
+
+h1 {
+  font-size: clamp(1.6rem, 2.6vw, 2.25rem);
+  font-weight: 700;
+}
+
+h2 {
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+p {
+  margin: 0 0 1em;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* --- Shared building blocks (used by many pages) --- */
+
+.page {
+  width: 100%;
+  max-width: var(--page-width);
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+.narrow {
+  max-width: 440px;
+}
+
+@media (max-width: 560px) {
+  .page {
+    padding: 20px 16px 48px;
+  }
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.btn:hover {
+  background: var(--accent-hover);
+  text-decoration: none;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--border);
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.btn-danger:hover {
+  background: rgba(224, 87, 79, 0.12);
+}
+
+.btn-small {
+  padding: 6px 12px;
+  font-size: 0.875rem;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.hint {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.error {
+  color: var(--danger);
+}
+
+.notice {
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border-left: 3px solid var(--accent);
+}
+
+.notice-error {
+  border-left-color: var(--danger);
+}
+
+.notice-success {
+  border-left-color: var(--success);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--muted);
+}
+
+.chip-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.chip-active:hover {
+  border-color: var(--accent);
+}

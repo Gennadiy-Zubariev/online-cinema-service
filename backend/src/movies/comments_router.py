@@ -21,6 +21,15 @@ from src.movies.schemas import (
 router = APIRouter(tags=["movies"])
 
 
+def _author_name(comment: MovieComment) -> str | None:
+    """First and last name from the author's profile; None if both are empty."""
+    profile = comment.author.profile
+    if profile is None:
+        return None
+    parts = [part for part in (profile.first_name, profile.last_name) if part]
+    return " ".join(parts) or None
+
+
 def _to_comment_response(comment: MovieComment, likes: int) -> CommentResponse:
     """Build CommentResponse with an already counted number of likes."""
     return CommentResponse(
@@ -31,6 +40,7 @@ def _to_comment_response(comment: MovieComment, likes: int) -> CommentResponse:
         text=comment.text,
         created_at=comment.created_at,
         likes=likes,
+        author_name=_author_name(comment),
     )
 
 

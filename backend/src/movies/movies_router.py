@@ -135,8 +135,8 @@ async def get_movie_list(
     Filters (optional, bounds inclusive): `year_from` / `year_to`,
     `imdb_min` / `imdb_max`. An inverted range returns an empty list.
     `genre_id` returns movies of that genre (unknown id - an empty list).
-    Sorting: `sort_by` is `id` (default), `price`, `year` (release date)
-    or `votes` (popularity); `order` is `asc` (default) or `desc`.
+    Sorting: `sort_by` is `id` (default), `price`, `year` (release date),
+    `votes` (popularity) or `imdb`; `order` is `asc` (default) or `desc`.
     Movies with equal sort values are ordered by id, so pages are stable.
     Paginated: `page` starts at 1, `page_size` is 1-100 (default 20);
     `total` counts all movies matching the filters.
