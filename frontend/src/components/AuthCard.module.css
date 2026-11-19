@@ -1,0 +1,28 @@
+.wrap {
+  display: flex;
+  justify-content: center;
+  padding: 56px 16px 80px;
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 0%, rgba(240, 180, 60, 0.12), transparent 70%), var(--bg);
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  padding: 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.title {
+  font-size: 1.5rem;
+  margin-bottom: 24px;
+}
+
+.card :global(.form) + p,
+.card p:last-child {
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
