@@ -221,10 +221,11 @@ export function MovieForm({ movie, onDone }: MovieFormProps) {
           />
         </div>
         <div className="field">
-          <label htmlFor="meta_score">Metascore (необовʼязково)</label>
+          <label htmlFor="meta_score">Metascore</label>
           <input
             id="meta_score"
             name="meta_score"
+            placeholder="необовʼязково"
             className="input"
             type="number"
             min={0}
@@ -233,10 +234,11 @@ export function MovieForm({ movie, onDone }: MovieFormProps) {
           />
         </div>
         <div className="field">
-          <label htmlFor="gross">Збори, млн $ (необовʼязково)</label>
+          <label htmlFor="gross">Збори, млн $</label>
           <input
             id="gross"
             name="gross"
+            placeholder="необовʼязково"
             className="input"
             type="number"
             min={0}

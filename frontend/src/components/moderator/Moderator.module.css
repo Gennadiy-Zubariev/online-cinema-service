@@ -83,6 +83,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 16px;
+  align-items: end; /* a two-line label must not push its input below the others */
 }
 
 .wide {
