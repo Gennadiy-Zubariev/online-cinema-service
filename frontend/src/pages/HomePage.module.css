@@ -1,0 +1,126 @@
+.hero {
+  position: relative;
+  overflow: hidden;
+  min-height: 560px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+
+/* A wall of posters, tilted and pushed to the right; the text sits on the left. */
+.collage {
+  position: absolute;
+  top: -120px;
+  right: -160px;
+  width: 1100px;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+  transform: rotate(-12deg);
+  opacity: 0.55;
+}
+
+.collage > :nth-child(even) {
+  transform: translateY(70px);
+}
+
+/* Fade the wall into the background under the text. */
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, var(--bg) 30%, rgba(16, 20, 31, 0.75) 55%, rgba(16, 20, 31, 0.2)),
+    linear-gradient(0deg, var(--bg), transparent 30%);
+}
+
+.heroContent {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: var(--page-width);
+  margin: 0 auto;
+  padding: 64px 24px;
+}
+
+.headline {
+  max-width: 13ch;
+  font-size: clamp(2.2rem, 5vw, 4rem);
+  line-height: 1.05;
+  margin-bottom: 20px;
+}
+
+.lead {
+  max-width: 46ch;
+  font-size: 1.1rem;
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.browse {
+  padding: 0 8px;
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.section {
+  margin-bottom: 40px;
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.genres {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.genre {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.genre:hover {
+  border-color: var(--accent);
+  text-decoration: none;
+}
+
+.genre .muted {
+  font-size: 0.82rem;
+  font-weight: 400;
+}
+
+@media (max-width: 760px) {
+  .hero {
+    min-height: 480px;
+  }
+
+  .collage {
+    right: -420px;
+    opacity: 0.35;
+  }
+
+  .heroContent {
+    padding: 48px 16px;
+  }
+}
