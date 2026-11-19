@@ -36,6 +36,18 @@ services:
       minio:
         condition: service_healthy
 
+  frontend:
+    build: ./frontend
+    environment:
+      API_PROXY_TARGET: http://web:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules # node_modules from the image, not from the host
+    depends_on:
+      - web
+
 
   db:
     image: postgres:17-alpine

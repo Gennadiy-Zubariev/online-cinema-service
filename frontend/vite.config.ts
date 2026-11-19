@@ -8,7 +8,8 @@ export default defineConfig({
     port: 3000,
     strictPort: true,
     proxy: {
-      '/api': 'http://localhost:8000',
+      // In docker compose the backend is the `web` service, not localhost.
+      '/api': process.env.API_PROXY_TARGET ?? 'http://localhost:8000',
     },
   },
 })
