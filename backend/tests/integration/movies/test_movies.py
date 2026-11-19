@@ -1481,16 +1481,16 @@ async def sort_movies(db_session: AsyncSession, catalog: Catalog) -> list[Movie]
             name=name,
             year=year,
             time=100,
-            imdb=7.0,
+            imdb=imdb,
             votes=votes,
             description="Description.",
             price=Decimal(price),
             certification=catalog.certification,
         )
-        for name, year, price, votes in [
-            ("A", 2010, "9.99", 500),
-            ("B", 2000, "4.99", 900),
-            ("C", 2005, "9.99", 100),
+        for name, year, price, votes, imdb in [
+            ("A", 2010, "9.99", 500, 8.0),
+            ("B", 2000, "4.99", 900, 6.5),
+            ("C", 2005, "9.99", 100, 7.2),
         ]
     ]
     db_session.add_all(movies)
@@ -1509,6 +1509,8 @@ async def sort_movies(db_session: AsyncSession, catalog: Catalog) -> list[Movie]
         ({"sort_by": "year", "order": "desc"}, ["A", "C", "B"]),
         ({"sort_by": "votes"}, ["C", "A", "B"]),
         ({"sort_by": "votes", "order": "desc"}, ["B", "A", "C"]),
+        ({"sort_by": "imdb"}, ["B", "C", "A"]),
+        ({"sort_by": "imdb", "order": "desc"}, ["A", "C", "B"]),
         ({"order": "desc"}, ["C", "B", "A"]),
     ],
     ids=[
@@ -1520,6 +1522,8 @@ async def sort_movies(db_session: AsyncSession, catalog: Catalog) -> list[Movie]
         "year_desc",
         "votes_asc",
         "votes_desc",
+        "imdb_asc",
+        "imdb_desc",
         "order_without_sort_by",
     ],
 )

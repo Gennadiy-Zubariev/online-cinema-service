@@ -17,6 +17,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from src.accounts.models import User
 from src.database.base import Base
 
 
@@ -177,6 +178,7 @@ class MovieComment(Base):
     )
 
     replies: Mapped[list["MovieComment"]] = relationship(order_by="MovieComment.id")
+    author: Mapped[User] = relationship()
 
 
 class CommentLike(Base):

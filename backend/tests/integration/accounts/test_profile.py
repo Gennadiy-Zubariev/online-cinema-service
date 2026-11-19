@@ -5,7 +5,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.accounts.models import User, UserProfile
+from src.accounts.models import User, UserGroupEnum, UserProfile
 from src.accounts.security import create_access_token
 from src.accounts.service import MAX_AVATAR_SIZE
 from src.config.settings import get_settings
@@ -14,6 +14,8 @@ from tests.integration.conftest import CreateUser
 PROFILE_URL = "/api/v1/accounts/profile"
 AVATAR_URL = "/api/v1/accounts/profile/avatar"
 EMPTY_PROFILE = {
+    "email": "user@example.com",
+    "group": "user",
     "first_name": None,
     "last_name": None,
     "gender": None,
@@ -45,6 +47,20 @@ async def stored_profile(db_session: AsyncSession, user: User) -> UserProfile | 
 # --- GET / PATCH ---
 
 
+async def test_profile_contains_email_and_group(
+    client: AsyncClient, create_user: CreateUser
+) -> None:
+    moderator = await create_user(
+        email="mod@example.com", is_active=True, group=UserGroupEnum.MODERATOR
+    )
+
+    response = await client.get(PROFILE_URL, headers=auth_header(moderator))
+
+    body = response.json()
+    assert body["email"] == "mod@example.com"
+    assert body["group"] == "moderator"
+
+
 async def test_get_profile_without_profile_returns_empty(
     client: AsyncClient, db_session: AsyncSession, create_user: CreateUser
 ) -> None:
@@ -72,7 +88,7 @@ async def test_patch_creates_profile(
     response = await client.patch(PROFILE_URL, json=payload, headers=auth_header(user))
 
     assert response.status_code == 200
-    assert response.json() == {**payload, "avatar_url": None}
+    assert response.json() == {**EMPTY_PROFILE, **payload}
     assert await stored_profile(db_session, user) is not None
     get_response = await client.get(PROFILE_URL, headers=auth_header(user))
     assert get_response.json() == response.json()

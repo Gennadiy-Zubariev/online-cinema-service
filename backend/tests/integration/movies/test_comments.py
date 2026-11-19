@@ -11,7 +11,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.accounts.models import User, UserGroupEnum
+from src.accounts.models import User, UserGroupEnum, UserProfile
 from src.movies.models import CommentLike, Movie, MovieComment
 from tests.integration.conftest import (
     UNKNOWN_ID,
@@ -111,6 +111,7 @@ async def test_create_comment(
     assert body["text"] == "Great movie!"
     assert body["created_at"] is not None
     assert body["likes"] == 0
+    assert body["author_name"] is None  # no profile yet
 
     [stored] = await stored_comments(db_session)
     assert stored.id == body["id"]
@@ -486,3 +487,71 @@ async def test_list_comments_invalid_pagination_returns_422(
     response = await client.get(comments_url(movie.id), params=params)
 
     assert response.status_code == 422
+
+
+# --- author name ---
+
+
+async def add_profile(
+    db_session: AsyncSession,
+    user: User,
+    first_name: str | None,
+    last_name: str | None,
+) -> None:
+    db_session.add(
+        UserProfile(user_id=user.id, first_name=first_name, last_name=last_name)
+    )
+    await db_session.commit()
+
+
+@pytest.mark.parametrize(
+    ("first_name", "last_name", "expected"),
+    [
+        ("Gena", "Z", "Gena Z"),
+        ("Gena", None, "Gena"),
+        (None, "Z", "Z"),
+        (None, None, None),
+    ],
+    ids=["full_name", "first_only", "last_only", "empty_profile"],
+)
+async def test_create_comment_returns_author_name(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    user: User,
+    movie: Movie,
+    first_name: str | None,
+    last_name: str | None,
+    expected: str | None,
+) -> None:
+    await add_profile(db_session, user, first_name, last_name)
+
+    response = await client.post(
+        comments_url(movie.id), json={"text": "Hi"}, headers=auth_header(user)
+    )
+
+    assert response.status_code == 201
+    assert response.json()["author_name"] == expected
+
+
+async def test_list_comments_returns_author_names_in_fresh_session(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    create_user: CreateUser,
+    user: User,
+    movie: Movie,
+    comment: MovieComment,
+) -> None:
+    """Authors and profiles of comments and replies are eager-loaded."""
+    other = await create_user(
+        email="other@example.com", is_active=True, token_expires_in=None
+    )
+    await add_profile(db_session, user, "Gena", "Z")
+    await save_comment(db_session, other, movie, "Agree!", parent=comment)
+    db_session.expunge_all()
+
+    response = await client.get(comments_url(movie.id))
+
+    assert response.status_code == 200
+    [item] = response.json()["items"]
+    assert item["author_name"] == "Gena Z"
+    assert item["replies"][0]["author_name"] is None

@@ -3,9 +3,13 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.accounts.models import User
 from src.movies.exceptions import EntityNotFoundError, NestedReplyError
 from src.movies.models import Movie, MovieComment, CommentLike
 from src.movies.schemas import CommentCreateRequest
+
+# Comment author with the profile: its name is shown next to the comment.
+AUTHOR_LOADER = selectinload(MovieComment.author).selectinload(User.profile)
 
 
 async def create_comment(
@@ -30,13 +34,22 @@ async def create_comment(
     )
     db.add(comment)
     await db.commit()
-    return comment
+    # Reload with the author: the response needs the author's name.
+    result = await db.execute(
+        select(MovieComment)
+        .where(MovieComment.id == comment.id)
+        .options(AUTHOR_LOADER)
+        .execution_options(populate_existing=True)
+    )
+    return result.scalar_one()
 
 
 async def list_comments(
     db: AsyncSession, movie_id: int, page: int, page_size: int
 ) -> tuple[list[MovieComment], int]:
     """Return (top-level comments newest first with replies loaded, total).
+
+    Authors (with profiles) of comments and replies are loaded too.
 
     Raises EntityNotFoundError for an unknown movie. total counts only
     top-level comments.
@@ -48,7 +61,12 @@ async def list_comments(
     )
     total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
     result = await db.scalars(
-        stmt.options(selectinload(MovieComment.replies))
+        stmt.options(
+            AUTHOR_LOADER,
+            selectinload(MovieComment.replies)
+            .selectinload(MovieComment.author)
+            .selectinload(User.profile),
+        )
         .order_by(MovieComment.id.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)

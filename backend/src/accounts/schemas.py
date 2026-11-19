@@ -91,6 +91,8 @@ class UserListResponse(BaseModel):
 
 
 class ProfileResponse(BaseModel):
+    email: str
+    group: UserGroupEnum
     first_name: str | None = None
     last_name: str | None = None
     gender: GenderEnum | None = None

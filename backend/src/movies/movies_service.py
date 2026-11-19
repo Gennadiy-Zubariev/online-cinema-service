@@ -25,6 +25,7 @@ SORT_COLUMNS = {
     "price": Movie.price,
     "year": Movie.year,
     "votes": Movie.votes,
+    "imdb": Movie.imdb,
 }
 
 
