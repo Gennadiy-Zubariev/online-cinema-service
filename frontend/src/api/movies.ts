@@ -119,3 +119,13 @@ export function updateEntity(kind: EntityKind, entityId: number, name: string) {
 export function deleteEntity(kind: EntityKind, entityId: number) {
   return api(`/${kind}/${entityId}`, { method: 'DELETE' })
 }
+
+// All records of a reference list (the API gives at most 100 per page).
+export async function listAllEntities(kind: EntityKind): Promise<NamedEntity[]> {
+  const items: NamedEntity[] = []
+  for (let page = 1; ; page++) {
+    const data = await listEntities(kind, page, 100)
+    items.push(...data.items)
+    if (page * 100 >= data.total) return items
+  }
+}

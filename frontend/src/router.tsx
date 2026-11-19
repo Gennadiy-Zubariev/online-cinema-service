@@ -8,6 +8,7 @@ import { CartPage } from './pages/CartPage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
+import { ModeratorPage } from './pages/ModeratorPage'
 import { MovieDetailPage } from './pages/MovieDetailPage'
 import { MoviesPage } from './pages/MoviesPage'
 import { NotFoundPage } from './pages/NotFoundPage'
@@ -37,6 +38,14 @@ export const router = createBrowserRouter([
         element: (
           <RequireAuth>
             <AccountPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: '/moderator',
+        element: (
+          <RequireAuth>
+            <ModeratorPage />
           </RequireAuth>
         ),
       },

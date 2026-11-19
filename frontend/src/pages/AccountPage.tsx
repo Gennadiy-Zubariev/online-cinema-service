@@ -5,7 +5,7 @@ import { useAuth } from '../auth/useAuth'
 import { MovieCatalog } from '../components/MovieCatalog'
 import { ProfileSection } from '../components/ProfileSection'
 import { Spinner } from '../components/Spinner'
-import styles from './AccountPage.module.css'
+import { Tabs } from '../components/Tabs'
 
 const TABS = [
   { id: 'profile', label: 'Профіль' },
@@ -24,19 +24,8 @@ export function AccountPage() {
   return (
     <div className="page">
       <h1>Кабінет</h1>
-      <nav className={styles.tabs} aria-label="Розділи кабінету">
-        {TABS.map((item) => (
-          <Link
-            key={item.id}
-            // Switching a tab drops the catalog filters of the previous one.
-            to={`/account?tab=${item.id}`}
-            className={item.id === tab ? styles.tabActive : styles.tab}
-            aria-current={item.id === tab ? 'page' : undefined}
-          >
-            {item.label}
-          </Link>
-        ))}
-      </nav>
+      {/* Switching a tab drops the catalog filters of the previous one. */}
+      <Tabs tabs={TABS} activeId={tab} basePath="/account" label="Розділи кабінету" />
 
       {tab === 'profile' && (profile ? <ProfileSection profile={profile} /> : <Spinner />)}
       {tab === 'favorites' && (
