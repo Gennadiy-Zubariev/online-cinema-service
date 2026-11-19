@@ -118,8 +118,10 @@ export function refreshAccessToken(): Promise<string | null> {
 export async function api<T = void>(path: string, options: RequestOptions = {}): Promise<T> {
   let response = await send(path, options)
 
-  // Access token expired (15 min): get a new one and repeat the request once.
-  if (response.status === 401 && accessToken) {
+  // Access token expired (15 min) or lost from memory (e.g. Vite HMR re-ran this
+  // module): get a new one from the refresh cookie and repeat the request once.
+  // Login is skipped: its 401 means a wrong password, not a stale token.
+  if (response.status === 401 && path !== '/accounts/login') {
     const token = await refreshAccessToken()
     if (token) {
       response = await send(path, options)
