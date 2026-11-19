@@ -106,7 +106,7 @@ export function MoviesManager() {
         <button type="button" className="btn" onClick={() => setMode('create')}>
           Додати фільм
         </button>
-        <form className={styles.toolbar} onSubmit={handleSearch}>
+        <form className={styles.toolbarForm} onSubmit={handleSearch}>
           <input
             name="search"
             className="input"
@@ -117,7 +117,7 @@ export function MoviesManager() {
             Знайти
           </button>
         </form>
-        <form className={styles.toolbar} onSubmit={handleOpenById}>
+        <form className={styles.toolbarForm} onSubmit={handleOpenById}>
           <input
             className="input"
             type="number"

@@ -22,6 +22,8 @@ const EXACT: Record<string, string> = {
   'Order not found.': 'Замовлення не знайдено.',
   'Only pending orders can be paid.': 'Оплатити можна лише неоплачене замовлення.',
   'Image must be a JPEG, PNG or WebP image.': 'Підходять лише зображення JPEG, PNG або WebP.',
+  'Movie is in use.': 'Фільм не можна видалити: його вже купили або він є в замовленні.',
+  'Certification is in use.': 'Сертифікацію не можна видалити: її мають фільми.',
   'Replies to replies are not allowed.': 'Відповісти можна лише на коментар, не на відповідь.',
   'Password must contain at least one uppercase letter':
     'Пароль має містити хоча б одну велику латинську літеру (A–Z).',
