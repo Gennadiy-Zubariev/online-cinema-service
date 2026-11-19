@@ -1,73 +1,34 @@
-# React + TypeScript + Vite
+# Online Cinema — frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 + TypeScript + Vite. SPA that talks to the FastAPI backend through `/api`.
 
-Currently, two official plugins are available:
+## Run
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm ci
+npm run dev        # http://localhost:3000, /api is proxied to localhost:8000
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+Or the whole stack: `docker compose up -d` from the repository root (service `frontend`).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Scripts
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+| Script                 | What it does                                                      |
+| ---------------------- | ----------------------------------------------------------------- |
+| `npm run lint`         | ESLint (typed rules)                                              |
+| `npm run format`       | Prettier: format all files                                        |
+| `npm run format:check` | Prettier: check only (CI)                                         |
+| `npm run build`        | `tsc -b` type check + production build to `dist/`                 |
+| `npm run gen:api`      | Regenerate `src/api/schema.d.ts` from the running backend OpenAPI |
+
+## Structure
+
+```
+src/
+├── api/          # fetch wrapper (client.ts), endpoints by domain, generated types
+├── auth/         # AuthProvider: access token in memory, refresh cookie on reload
+├── hooks/        # useLibrary (favorites / purchased / cart ids), useCatalogParams
+├── components/   # Navbar, MovieCard, MovieCatalog, Comments, moderator/ ...
+├── pages/        # one file per route (see router.tsx)
+└── utils/        # formatting, error text, form helpers
 ```
