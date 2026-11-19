@@ -1,13 +1,17 @@
-import { createBrowserRouter } from 'react-router'
+import { createBrowserRouter, Navigate } from 'react-router'
 
 import { Layout } from './components/Layout'
+import { RequireAuth } from './components/RequireAuth'
+import { AccountPage } from './pages/AccountPage'
 import { ActivatePage } from './pages/ActivatePage'
+import { CartPage } from './pages/CartPage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
 import { MovieDetailPage } from './pages/MovieDetailPage'
 import { MoviesPage } from './pages/MoviesPage'
 import { NotFoundPage } from './pages/NotFoundPage'
+import { PaymentCancelPage, PaymentSuccessPage } from './pages/PaymentResultPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ResetPasswordPage } from './pages/ResetPasswordPage'
 
@@ -25,6 +29,19 @@ export const router = createBrowserRouter([
       { path: '/activate', element: <ActivatePage /> },
       { path: '/forgot-password', element: <ForgotPasswordPage /> },
       { path: '/reset-password', element: <ResetPasswordPage /> },
+      { path: '/cart', element: <CartPage /> },
+      { path: '/payment/success', element: <PaymentSuccessPage /> },
+      { path: '/payment/cancel', element: <PaymentCancelPage /> },
+      {
+        path: '/account',
+        element: (
+          <RequireAuth>
+            <AccountPage />
+          </RequireAuth>
+        ),
+      },
+      // Link from the payment confirmation email.
+      { path: '/purchased', element: <Navigate to="/account?tab=purchased" replace /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },
