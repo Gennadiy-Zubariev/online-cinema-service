@@ -48,6 +48,10 @@ function PendingOrders({ orders }: { orders: Order[] }) {
   return (
     <section className={styles.section}>
       <h2>Неоплачені замовлення</h2>
+      <p className="notice">
+        Демо-оплата (Stripe test mode): картка <code>4242 4242 4242 4242</code>, будь-яка майбутня
+        дата й CVC. Справжні гроші не списуються.
+      </p>
       {pay.isError && <p className="notice notice-error">{getErrorMessage(pay.error)}</p>}
       <div className={styles.orders}>
         {orders.map((order) => (
