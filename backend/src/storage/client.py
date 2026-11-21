@@ -1,14 +1,19 @@
+from typing import TYPE_CHECKING
+
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
-from mypy_boto3_s3 import S3Client
 
 from src.config.settings import Settings, get_settings
+
+if TYPE_CHECKING:
+    # Type stubs are a dev dependency: not installed in the production image.
+    from mypy_boto3_s3 import S3Client
 
 settings = get_settings()
 
 
-def _create_client(endpoint_url: str, settings: Settings) -> S3Client:
+def _create_client(endpoint_url: str, settings: Settings) -> "S3Client":
     """Create an S3 client for the endpoint with SigV4 signing.
 
     Without signature_version and region boto3 falls back to SigV2,
