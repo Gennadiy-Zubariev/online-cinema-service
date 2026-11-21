@@ -1,0 +1,42 @@
+# Production image: web, worker, beat and migrate all run from it
+# (different `command` in docker-compose.prod.yaml).
+
+# ---------- Stage 1: builder — installs dependencies into a venv ----------
+FROM python:3.12-slim AS builder
+
+ENV POETRY_VERSION=2.5.1 \
+    POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=false \
+    VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
+
+RUN pip install --no-cache-dir "poetry==$POETRY_VERSION" \
+    && python -m venv /opt/venv
+
+WORKDIR /build
+COPY pyproject.toml poetry.lock ./
+RUN poetry install --only main --no-root
+
+
+# ---------- Stage 2: runtime — only Python, the venv and the code ----------
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH"
+
+RUN useradd --create-home --uid 1000 app
+
+COPY --from=builder /opt/venv /opt/venv
+
+WORKDIR /app
+COPY alembic.ini ./
+COPY alembic ./alembic
+COPY commands ./commands
+COPY src ./src
+
+USER app
+
+EXPOSE 8000
+
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

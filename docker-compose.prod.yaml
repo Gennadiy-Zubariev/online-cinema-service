@@ -1,0 +1,137 @@
+# Production stack (AWS EC2). Run from the repo root:
+#   docker compose -f docker-compose.prod.yaml up -d --build
+#
+# Needs two files on the server (never in git):
+#   .env          — DOMAIN=<your-domain> (read by compose itself, for ${DOMAIN} below)
+#   backend/.env  — application settings and secrets (see backend/.env.prod.sample)
+#
+# Differences from docker-compose.yml (dev): production images, code baked into
+# the image (no volumes with code), no mailpit, only nginx publishes ports (80/443),
+# restart policies.
+
+services:
+  nginx:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env next to docker-compose.prod.yaml}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Certificates and ACME challenge files are managed by certbot on the host.
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+    depends_on:
+      - web
+      - minio
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    command: alembic upgrade head
+    env_file:
+      - ./backend/.env
+    environment:
+      POSTGRES_HOST: db
+      REDIS_HOST: redis
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    env_file:
+      - ./backend/.env
+    environment:
+      POSTGRES_HOST: db
+      REDIS_HOST: redis
+      S3_ENDPOINT_URL: http://minio:9000
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    # One worker process: the server has 1 GB RAM, the tasks are only emails.
+    command: celery -A src.tasks.celery_app:celery_app worker --loglevel=info --concurrency=1
+    env_file:
+      - ./backend/.env
+    environment:
+      POSTGRES_HOST: db
+      REDIS_HOST: redis
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    command: celery -A src.tasks.celery_app:celery_app beat --loglevel=info -s /tmp/celerybeat-schedule
+    env_file:
+      - ./backend/.env
+    environment:
+      REDIS_HOST: redis
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:17-alpine
+    env_file:
+      - ./backend/.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  minio:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    command: server /data
+    env_file:
+      - ./backend/.env
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+
+volumes:
+  postgres_data:
+  minio_data:
