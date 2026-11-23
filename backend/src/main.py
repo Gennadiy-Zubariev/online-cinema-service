@@ -16,6 +16,8 @@ from src.accounts.exception_handlers import (
     invalid_password_reset_token_handler,
     permission_denied_handler,
     user_not_found_handler,
+    user_deactivated_handler,
+    self_deactivation_handler,
 )
 from src.accounts.exceptions import (
     UserAlreadyExistsError,
@@ -29,6 +31,8 @@ from src.accounts.exceptions import (
     InvalidPasswordResetTokenError,
     PermissionDeniedError,
     UserNotFoundError,
+    UserDeactivatedError,
+    SelfDeactivationError,
 )
 from src.accounts.router import router as accounts_router
 from src.cart.exception_handlers import movie_already_purchase_handler
@@ -109,6 +113,8 @@ app.add_exception_handler(
 )
 app.add_exception_handler(PermissionDeniedError, permission_denied_handler)
 app.add_exception_handler(UserNotFoundError, user_not_found_handler)
+app.add_exception_handler(UserDeactivatedError, user_deactivated_handler)
+app.add_exception_handler(SelfDeactivationError, self_deactivation_handler)
 app.add_exception_handler(UnsupportedImageTypeError, unsupported_image_type_handler)
 app.add_exception_handler(ImageTooLargeError, image_too_large_handler)
 app.add_exception_handler(EntityNotFoundError, entity_not_found_handler)

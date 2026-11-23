@@ -98,6 +98,28 @@ async def test_resend_for_active_user_returns_same_response(
     assert token is None
 
 
+async def test_resend_for_deactivated_user_returns_same_response(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    create_user: CreateUser,
+    send_activation_email_mock: MagicMock,
+) -> None:
+    # Otherwise a deactivated user would activate himself by email.
+    user = await create_user(is_active=False, token_expires_in=None)
+    user.deactivated_at = datetime.now(UTC)
+    await db_session.commit()
+
+    response = await client.post(RESEND_URL, json={"email": user.email})
+
+    assert response.status_code == 200
+    assert response.json() == NEUTRAL_RESPONSE
+    send_activation_email_mock.delay.assert_not_called()
+    token = await db_session.scalar(
+        select(ActivationToken).where(ActivationToken.user_id == user.id)
+    )
+    assert token is None
+
+
 async def test_resend_rejects_invalid_email(client: AsyncClient) -> None:
     response = await client.post(RESEND_URL, json={"email": "not-an-email"})
 

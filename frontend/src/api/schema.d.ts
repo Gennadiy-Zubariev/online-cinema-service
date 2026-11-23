@@ -149,10 +149,11 @@ export interface paths {
         put?: never;
         /**
          * Refresh
-         * @description Get a new access token using the refresh token from the cookie.
+         * @description Get a new access token and rotate the refresh token in the cookie.
          *
-         *     Returns 401 if the refresh token is missing, invalid, expired
-         *     or revoked by logout.
+         *     The old refresh token stops working. Reusing it (a stolen copy) revokes
+         *     all refresh tokens of the user. Returns 401 if the refresh token is
+         *     missing, invalid, expired, revoked or the user is deactivated.
          */
         post: operations["refresh_api_v1_accounts_refresh_post"];
         delete?: never;
@@ -267,6 +268,31 @@ export interface paths {
          *     get 200 as well. Returns 404 if the user does not exist.
          */
         post: operations["activate_user_api_v1_accounts_users__user_id__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/users/{user_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deactivate User
+         * @description Manually deactivate a user's account (admin only).
+         *
+         *     Logs the user out on every device; he cannot log in or resend the
+         *     activation email until an admin activates him again. Already
+         *     deactivated users get 200 as well. Returns 400 for the admin's own
+         *     account and 404 if the user does not exist.
+         */
+        post: operations["deactivate_user_api_v1_accounts_users__user_id__deactivate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1554,6 +1580,8 @@ export interface components {
             email: string;
             /** Is Active */
             is_active: boolean;
+            /** Deactivated At */
+            deactivated_at: string | null;
             /**
              * Created At
              * Format: date-time
@@ -1976,6 +2004,37 @@ export interface operations {
         };
     };
     activate_user_api_v1_accounts_users__user_id__activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deactivate_user_api_v1_accounts_users__user_id__deactivate_post: {
         parameters: {
             query?: never;
             header?: never;

@@ -14,6 +14,8 @@ const EXACT: Record<string, string> = {
   'Old password is incorrect.': 'Поточний пароль неправильний.',
   'You do not have permission to perform this action.': 'Недостатньо прав для цієї дії.',
   'User not found.': 'Користувача не знайдено.',
+  'Account is deactivated.': 'Акаунт деактивовано адміністратором.',
+  'You cannot deactivate your own account.': 'Свій акаунт деактивувати не можна.',
   'Movie already purchased.': 'Цей фільм уже придбано — купити його вдруге не можна.',
   'Cart is empty.': 'Корзина порожня.',
   'All movies in the cart are already purchased.': 'Усі фільми з корзини вже придбано.',

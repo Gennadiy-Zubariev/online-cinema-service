@@ -150,6 +150,34 @@ async def test_login_rejects_inactive_user(
     assert await db_session.scalar(select(RefreshToken)) is None
 
 
+async def test_login_rejects_deactivated_user(
+    client: AsyncClient, db_session: AsyncSession, create_user: CreateUser
+) -> None:
+    # Own message: resending the activation email would not help.
+    user = await create_user(is_active=False, token_expires_in=None)
+    user.deactivated_at = datetime.now(UTC)
+    await db_session.commit()
+
+    response = await login(client)
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Account is deactivated."}
+    assert await db_session.scalar(select(RefreshToken)) is None
+
+
+async def test_login_deactivated_user_with_wrong_password_gets_401(
+    client: AsyncClient, db_session: AsyncSession, create_user: CreateUser
+) -> None:
+    user = await create_user(is_active=False, token_expires_in=None)
+    user.deactivated_at = datetime.now(UTC)
+    await db_session.commit()
+
+    response = await login(client, password="WrongPass1!")
+
+    assert response.status_code == 401
+    assert response.json() == INVALID_CREDENTIALS
+
+
 async def test_login_inactive_user_with_wrong_password_gets_401(
     client: AsyncClient, create_user: CreateUser
 ) -> None:

@@ -271,3 +271,21 @@ async def test_refresh_rejects_deactivated_user(
 
     assert response.status_code == 401
     assert response.json() == INVALID_REFRESH_TOKEN
+
+
+async def test_refresh_of_deactivated_user_deletes_all_his_tokens(
+    client: AsyncClient, db_session: AsyncSession, create_user: CreateUser
+) -> None:
+    # Two devices; the user is deactivated directly in DB (no endpoint call).
+    user = await create_user(is_active=True, token_expires_in=None)
+    await login(client)
+    await login(client)
+    user.is_active = False
+    await db_session.commit()
+
+    await client.post(REFRESH_URL)
+    # The real get_db() rolls back on close; the test override does not.
+    # Without commit before raise the DELETE would be undone right here.
+    await db_session.rollback()
+
+    assert await stored_token_hashes(db_session) == []

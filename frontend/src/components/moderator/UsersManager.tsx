@@ -1,8 +1,9 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 
-import { activateUser, changeUserGroup, listUsers } from '../../api/accounts'
+import { activateUser, changeUserGroup, deactivateUser, listUsers } from '../../api/accounts'
 import type { AdminUser, UserGroup } from '../../api/types'
+import { useAuth } from '../../auth/useAuth'
 import { getErrorMessage } from '../../utils/errors'
 import { formatDate } from '../../utils/format'
 import { Pagination } from '../Pagination'
@@ -24,7 +25,18 @@ function UserRow({ user }: { user: AdminUser }) {
     onSuccess: refresh,
   })
   const activate = useMutation({ mutationFn: () => activateUser(user.id), onSuccess: refresh })
-  const error = group.error ?? activate.error
+  const deactivate = useMutation({ mutationFn: () => deactivateUser(user.id), onSuccess: refresh })
+  const error = group.error ?? activate.error ?? deactivate.error
+  // The backend refuses self-deactivation (400); the button is not shown either.
+  const isMe = useAuth().profile?.email === user.email
+
+  function confirmDeactivate() {
+    if (
+      window.confirm(`Деактивувати ${user.email}? Користувача буде розлогінено на всіх пристроях.`)
+    ) {
+      deactivate.mutate()
+    }
+  }
 
   return (
     <li className={styles.row}>
@@ -34,10 +46,24 @@ function UserRow({ user }: { user: AdminUser }) {
         <span className="muted"> · з {formatDate(user.created_at)}</span>
       </span>
       {user.is_active ? (
-        <span className={styles.badge}>Активний</span>
+        <>
+          <span className={styles.badge}>Активний</span>
+          {!isMe && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-small"
+              disabled={deactivate.isPending}
+              onClick={confirmDeactivate}
+            >
+              Деактивувати
+            </button>
+          )}
+        </>
       ) : (
         <>
-          <span className={`${styles.badge} ${styles.badgeWarn}`}>Не активований</span>
+          <span className={`${styles.badge} ${styles.badgeWarn}`}>
+            {user.deactivated_at ? 'Деактивований' : 'Не активований'}
+          </span>
           <button
             type="button"
             className="btn btn-secondary btn-small"
@@ -67,7 +93,7 @@ function UserRow({ user }: { user: AdminUser }) {
   )
 }
 
-// Admin only: users list, role change and manual activation.
+// Admin only: users list, role change, manual activation and deactivation.
 export function UsersManager() {
   const [page, setPage] = useState(1)
   const query = useQuery({

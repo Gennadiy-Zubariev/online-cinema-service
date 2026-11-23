@@ -44,6 +44,9 @@ async def get_current_admin(user: CurrentUser) -> User:
     return user
 
 
+AdminUser = Annotated[User, Depends(get_current_admin)]
+
+
 async def get_current_moderator(user: CurrentUser) -> User:
     """Allow moderators and admins; otherwise raise PermissionDeniedError (403)."""
     if user.group.name not in (UserGroupEnum.MODERATOR, UserGroupEnum.ADMIN):

@@ -51,6 +51,7 @@ def create_admin(session: Session, email: str) -> str:
     if user is not None:
         user.group = admin_group
         user.is_active = True
+        user.deactivated_at = None
         user.activation_token = None  # delete-orphan removes the unused token
         session.commit()
         return f"{email} is now an admin."

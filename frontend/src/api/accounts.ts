@@ -83,3 +83,7 @@ export function changeUserGroup(userId: number, group: UserGroup) {
 export function activateUser(userId: number) {
   return api<MessageResponse>(`/accounts/users/${userId}/activate`, { method: 'POST' })
 }
+
+export function deactivateUser(userId: number) {
+  return api<MessageResponse>(`/accounts/users/${userId}/deactivate`, { method: 'POST' })
+}

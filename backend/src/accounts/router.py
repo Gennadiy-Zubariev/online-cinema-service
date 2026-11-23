@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Response, status, Cookie, Depends, UploadFile
 
-from src.accounts.dependencies import CurrentUser, get_current_admin
+from src.accounts.dependencies import AdminUser, CurrentUser, get_current_admin
 from src.accounts.exceptions import InvalidRefreshTokenError
 from src.accounts.models import User, UserGroupEnum, UserProfile
 from src.accounts.schemas import (
@@ -33,6 +33,7 @@ from src.accounts.service import (
     reset_password,
     change_user_group,
     activate_user_manually,
+    deactivate_user_manually,
     list_users,
     get_user_profile,
     update_user_profile,
@@ -269,6 +270,25 @@ async def activate_user(db: DbSession, user_id: int) -> MessageResponse:
     """
     await activate_user_manually(db=db, user_id=user_id)
     return MessageResponse(message="User activated.")
+
+
+@router.post(
+    "/users/{user_id}/deactivate",
+    response_model=MessageResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def deactivate_user(
+    db: DbSession, admin: AdminUser, user_id: int
+) -> MessageResponse:
+    """Manually deactivate a user's account (admin only).
+
+    Logs the user out on every device; he cannot log in or resend the
+    activation email until an admin activates him again. Already
+    deactivated users get 200 as well. Returns 400 for the admin's own
+    account and 404 if the user does not exist.
+    """
+    await deactivate_user_manually(db=db, user_id=user_id, admin_id=admin.id)
+    return MessageResponse(message="User deactivated.")
 
 
 @router.get(

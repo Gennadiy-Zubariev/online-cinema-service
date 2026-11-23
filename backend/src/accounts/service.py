@@ -18,6 +18,8 @@ from src.accounts.exceptions import (
     IncorrectPasswordError,
     InvalidPasswordResetTokenError,
     UserNotFoundError,
+    UserDeactivatedError,
+    SelfDeactivationError,
 )
 from src.accounts.models import (
     ActivationToken,
@@ -141,7 +143,8 @@ async def resend_activation_token(
 ) -> None:
     """Replace the activation token and send the email again.
 
-    Unknown or already active email -> silent return (no user enumeration).
+    Unknown, already active or deactivated email -> silent return (no user
+    enumeration; a deactivated user must not reactivate himself).
     The old token is flushed out first: otherwise the unit of work inserts
     the new one before deleting the old one and hits the unique user_id.
     """
@@ -150,7 +153,7 @@ async def resend_activation_token(
         .where(User.email == data.email)
         .options(joinedload(User.activation_token))
     )
-    if not user or user.is_active:
+    if not user or user.is_active or user.deactivated_at is not None:
         return
     activation_token = user.activation_token
     if activation_token is not None:
@@ -174,7 +177,8 @@ async def login_user(
     """Check credentials and return (access token, refresh token).
 
     Raises InvalidCredentialsError for an unknown email or a wrong password,
-    UserNotActiveError only after the password matched. Stores the refresh
+    UserDeactivatedError / UserNotActiveError only after the password matched.
+    Stores the refresh
     token hash; tokens of other devices are kept.
     """
     user = await db.scalar(select(User).where(User.email == data.email))
@@ -186,6 +190,8 @@ async def login_user(
     )
     if not is_password_valid:
         raise InvalidCredentialsError()
+    if user.deactivated_at is not None:
+        raise UserDeactivatedError()
     if not user.is_active:
         raise UserNotActiveError()
 
@@ -228,6 +234,8 @@ async def rotate_refresh_token(
 
     user = await db.get(User, user_id)
     if user is None or not user.is_active:
+        await db.execute(delete(RefreshToken).where(RefreshToken.user_id == user_id))
+        await db.commit()
         raise InvalidRefreshTokenError()
 
     new_refresh_token = await _issue_refresh_token(
@@ -325,7 +333,9 @@ async def change_user_group(
 async def activate_user_manually(db: AsyncSession, user_id: int) -> None:
     """Activate the user (admin action) and delete the activation token.
 
-    Idempotent for an active user; raises UserNotFoundError.
+    Also lifts a deactivation. Refresh tokens issued before the user became
+    inactive are deleted, so old sessions do not come back to life.
+    Idempotent for an active user (his sessions stay); raises UserNotFoundError.
     """
     user = await db.scalar(
         select(User)
@@ -334,10 +344,42 @@ async def activate_user_manually(db: AsyncSession, user_id: int) -> None:
     )
     if user is None:
         raise UserNotFoundError()
-
+    was_active = user.is_active
     user.is_active = True
+    user.deactivated_at = None
     if user.activation_token is not None:
         await db.delete(user.activation_token)
+    if not was_active:
+        await db.execute(delete(RefreshToken).where(RefreshToken.user_id == user.id))
+    await db.commit()
+
+
+async def deactivate_user_manually(
+    db: AsyncSession, user_id: int, admin_id: int
+) -> None:
+    """Deactivate the user (admin action) and end all his sessions.
+
+    Deletes refresh tokens (every device is logged out) and the activation
+    token; deactivated_at blocks resending the activation email, so only an
+    admin can activate the user again. Access tokens stop working at once:
+    get_current_user checks is_active. Idempotent (the first deactivation
+    time is kept). Raises SelfDeactivationError or UserNotFoundError.
+    """
+    if user_id == admin_id:
+        raise SelfDeactivationError()
+    user = await db.scalar(
+        select(User)
+        .where(User.id == user_id)
+        .options(joinedload(User.activation_token))
+    )
+    if user is None:
+        raise UserNotFoundError()
+    user.is_active = False
+    if user.deactivated_at is None:
+        user.deactivated_at = datetime.now(UTC)
+    if user.activation_token is not None:
+        await db.delete(user.activation_token)
+    await db.execute(delete(RefreshToken).where(RefreshToken.user_id == user.id))
     await db.commit()
 
 
