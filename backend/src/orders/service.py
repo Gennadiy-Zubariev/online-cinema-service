@@ -21,7 +21,15 @@ async def create_order(
     snapshot of the current price. Only the cart items read here are removed
     (ordered and purchased ones), so a movie added meanwhile from another tab
     stays. One commit for the whole operation.
+    Locks the user's cart row (SELECT ... FOR UPDATE) so concurrent calls run
+    one after another: the second sees the emptied cart -> EmptyCartError.
     """
+    cart_id = await db.scalar(
+        select(Cart.id).where(Cart.user_id == user_id).with_for_update()
+    )
+    if cart_id is None:
+        raise EmptyCartError()
+
     cart_movies = await list_cart_movies(db=db, user_id=user_id)
     if not cart_movies:
         raise EmptyCartError()
@@ -45,7 +53,6 @@ async def create_order(
     )
     db.add(order)
 
-    cart_id = select(Cart.id).where(Cart.user_id == user_id).scalar_subquery()
     await db.execute(
         delete(CartItem).where(
             CartItem.cart_id == cart_id, CartItem.movie_id.in_(cart_movie_ids)
