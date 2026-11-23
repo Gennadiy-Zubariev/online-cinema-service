@@ -3,6 +3,7 @@ from datetime import timedelta
 import jwt
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.accounts.security import (
     JWT_ALGORITHM,
@@ -125,6 +126,21 @@ async def test_refresh_rejects_invalid_token(
         "garbage": "not-a-jwt",
     }
     use_refresh_cookie(client, tokens[token_kind])
+
+    response = await client.post(REFRESH_URL)
+
+    assert response.status_code == 401
+    assert response.json() == INVALID_REFRESH_TOKEN
+
+
+async def test_refresh_rejects_deactivated_user(
+    client: AsyncClient, db_session: AsyncSession, create_user: CreateUser
+) -> None:
+    # Deactivation must stop refreshing, not only the current access token.
+    user = await create_user(is_active=True, token_expires_in=None)
+    await login(client)
+    user.is_active = False
+    await db_session.commit()
 
     response = await client.post(REFRESH_URL)
 

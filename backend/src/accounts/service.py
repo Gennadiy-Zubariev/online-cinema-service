@@ -199,15 +199,16 @@ async def refresh_access_token(
 ) -> str:
     """Return a new access token for a valid, not revoked refresh token.
 
-    Raises InvalidRefreshTokenError. The refresh token is not rotated.
+    Raises InvalidRefreshTokenError if the token is invalid, revoked or the
+    user is deactivated. The refresh token is not rotated.
     """
     user_id = decode_refresh_token(token=refresh_token, settings=settings)
-    token_id = await db.scalar(
-        select(RefreshToken.id).where(
-            RefreshToken.token_hash == hash_token(refresh_token)
-        )
+    token = await db.scalar(
+        select(RefreshToken)
+        .where(RefreshToken.token_hash == hash_token(refresh_token))
+        .options(joinedload(RefreshToken.user))
     )
-    if token_id is None:
+    if token is None or not token.user.is_active:
         raise InvalidRefreshTokenError()
     return create_access_token(user_id=user_id, settings=settings)
 

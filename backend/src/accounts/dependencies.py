@@ -19,16 +19,17 @@ async def get_current_user(
     db: DbSession,
     settings: SettingsDep,
 ) -> User:
-    """Return the user from the Bearer access token, with the group loaded.
+    """Return the active user from the Bearer access token, with the group loaded.
 
-    Raises InvalidAccessTokenError (401) if the token is invalid or the user
-    no longer exists. is_active is not checked: inactive users cannot log in.
+    Raises InvalidAccessTokenError (401) if the token is invalid, the user
+    no longer exists or is deactivated: the check runs on every request,
+    so deactivation takes effect without waiting for the token to expire.
     """
     user_id = decode_access_token(credentials.credentials, settings)
     user = await db.scalar(
         select(User).where(User.id == user_id).options(joinedload(User.group))
     )
-    if user is None:
+    if user is None or not user.is_active:
         raise InvalidAccessTokenError()
     return user
 

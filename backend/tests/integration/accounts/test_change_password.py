@@ -160,3 +160,21 @@ async def test_change_password_rejects_token_of_deleted_user(
 
     assert response.status_code == 401
     assert response.json() == INVALID_ACCESS_TOKEN
+
+
+async def test_change_password_rejects_token_of_deactivated_user(
+    client: AsyncClient, db_session: AsyncSession, create_user: CreateUser
+) -> None:
+    # Deactivation must take effect at once, not when the token expires.
+    user = await create_user(is_active=True)
+    token = create_access_token(user.id, get_settings())
+    user.is_active = False
+    await db_session.commit()
+
+    response = await client.post(
+        CHANGE_PASSWORD_URL, json=PAYLOAD, headers=auth_header(token)
+    )
+
+    assert response.status_code == 401
+    assert response.json() == INVALID_ACCESS_TOKEN
+    assert response.headers["www-authenticate"] == "Bearer"
