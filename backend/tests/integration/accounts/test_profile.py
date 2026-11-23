@@ -9,9 +9,12 @@ from src.accounts.models import User, UserGroupEnum, UserProfile
 from src.accounts.security import create_access_token
 from src.accounts.service import MAX_AVATAR_SIZE
 from src.config.settings import get_settings
+from tests.images import make_image
 from tests.integration.conftest import CreateUser
 
 PROFILE_URL = "/api/v1/accounts/profile"
+PNG_IMAGE = make_image("PNG")
+JPEG_IMAGE = make_image("JPEG")
 AVATAR_URL = "/api/v1/accounts/profile/avatar"
 EMPTY_PROFILE = {
     "email": "user@example.com",
@@ -174,7 +177,7 @@ async def test_upload_avatar_stores_key_and_returns_url(
 
     response = await client.put(
         AVATAR_URL,
-        files={"file": ("my photo.PNG", b"png-bytes", "image/png")},
+        files={"file": ("my photo.PNG", PNG_IMAGE, "image/png")},
         headers=auth_header(user),
     )
 
@@ -185,7 +188,7 @@ async def test_upload_avatar_stores_key_and_returns_url(
     assert key.startswith(f"avatars/{user.id}/")
     assert key.endswith(".png")
     assert "photo" not in key
-    assert (data, content_type) == (b"png-bytes", "image/png")
+    assert (data, content_type) == (PNG_IMAGE, "image/png")
 
     profile = await stored_profile(db_session, user)
     assert profile is not None
@@ -204,12 +207,12 @@ async def test_upload_avatar_replaces_and_deletes_old_file(
     user = await create_user(is_active=True)
     headers = auth_header(user)
     await client.put(
-        AVATAR_URL, files={"file": ("a.png", b"old", "image/png")}, headers=headers
+        AVATAR_URL, files={"file": ("a.png", PNG_IMAGE, "image/png")}, headers=headers
     )
     old_key = storage_mock["upload_file"].call_args.args[0]
 
     await client.put(
-        AVATAR_URL, files={"file": ("b.jpg", b"new", "image/jpeg")}, headers=headers
+        AVATAR_URL, files={"file": ("b.jpg", JPEG_IMAGE, "image/jpeg")}, headers=headers
     )
 
     new_key = storage_mock["upload_file"].call_args.args[0]
@@ -226,7 +229,7 @@ async def test_patch_profile_keeps_avatar(
     user = await create_user(is_active=True)
     headers = auth_header(user)
     await client.put(
-        AVATAR_URL, files={"file": ("a.png", b"img", "image/png")}, headers=headers
+        AVATAR_URL, files={"file": ("a.png", PNG_IMAGE, "image/png")}, headers=headers
     )
 
     response = await client.patch(
@@ -236,24 +239,52 @@ async def test_patch_profile_keeps_avatar(
     assert response.json()["avatar_url"] is not None
 
 
-@pytest.mark.parametrize("content_type", ["image/gif", "image/svg+xml", "text/plain"])
-async def test_upload_avatar_rejects_unsupported_type(
+@pytest.mark.parametrize(
+    "data",
+    [
+        pytest.param(make_image("GIF"), id="gif"),
+        pytest.param(b'<svg xmlns="http://www.w3.org/2000/svg"/>', id="svg"),
+        pytest.param(b"<html><script>alert(1)</script></html>", id="html"),
+    ],
+)
+async def test_upload_avatar_rejects_content_that_is_not_supported_image(
     client: AsyncClient,
     create_user: CreateUser,
     storage_mock: dict[str, MagicMock],
-    content_type: str,
+    data: bytes,
 ) -> None:
+    # The client claims image/png: only the bytes decide.
     user = await create_user(is_active=True)
 
     response = await client.put(
         AVATAR_URL,
-        files={"file": ("file", b"data", content_type)},
+        files={"file": ("photo.png", data, "image/png")},
         headers=auth_header(user),
     )
 
     assert response.status_code == 415
     assert response.json() == {"detail": "Image must be a JPEG, PNG or WebP image."}
     storage_mock["upload_file"].assert_not_called()
+
+
+async def test_upload_avatar_uses_real_format_not_client_content_type(
+    client: AsyncClient,
+    create_user: CreateUser,
+    storage_mock: dict[str, MagicMock],
+) -> None:
+    # A PNG named .jpg and sent as image/jpeg is stored as PNG.
+    user = await create_user(is_active=True)
+
+    response = await client.put(
+        AVATAR_URL,
+        files={"file": ("photo.jpg", PNG_IMAGE, "image/jpeg")},
+        headers=auth_header(user),
+    )
+
+    assert response.status_code == 200
+    key, _, content_type = storage_mock["upload_file"].call_args.args
+    assert key.endswith(".png")
+    assert content_type == "image/png"
 
 
 async def test_upload_avatar_rejects_too_large_file(
@@ -283,7 +314,9 @@ async def test_upload_avatar_accepts_file_of_max_size(
 
     response = await client.put(
         AVATAR_URL,
-        files={"file": ("max.png", b"x" * MAX_AVATAR_SIZE, "image/png")},
+        files={
+            "file": ("max.png", make_image("PNG", size=MAX_AVATAR_SIZE), "image/png")
+        },
         headers=auth_header(user),
     )
 

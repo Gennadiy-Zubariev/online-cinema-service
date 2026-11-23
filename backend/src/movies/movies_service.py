@@ -200,15 +200,13 @@ async def delete_movie(db: AsyncSession, movie_id: int) -> None:
         await run_in_threadpool(delete_file, poster_key)
 
 
-async def update_movie_poster(
-    db: AsyncSession, movie_id: int, data: bytes, content_type: str | None
-) -> Movie:
+async def update_movie_poster(db: AsyncSession, movie_id: int, data: bytes) -> Movie:
     """Validate and upload a new poster, then delete the old file.
 
     The image is validated before the DB lookup. Order upload -> commit ->
     delete old: a failure leaves at most an orphan file in S3.
     """
-    content_type, extension = validate_image(data, content_type, MAX_POSTER_SIZE)
+    content_type, extension = validate_image(data, MAX_POSTER_SIZE)
     movie = await get_movie(db=db, movie_id=movie_id)
 
     old_key = movie.poster

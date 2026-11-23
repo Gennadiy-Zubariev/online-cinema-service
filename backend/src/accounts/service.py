@@ -381,7 +381,7 @@ async def update_user_profile(
 
 
 async def update_user_avatar(
-    db: AsyncSession, user_id: int, data: bytes, content_type: str | None
+    db: AsyncSession, user_id: int, data: bytes
 ) -> UserProfile:
     """Validate and upload a new avatar, then delete the old file.
 
@@ -389,7 +389,7 @@ async def update_user_avatar(
     Order upload -> commit -> delete old: a failure leaves at most an orphan
     file in S3, never a profile pointing to a missing one.
     """
-    content_type, extension = validate_image(data, content_type, MAX_AVATAR_SIZE)
+    content_type, extension = validate_image(data, MAX_AVATAR_SIZE)
 
     profile = await get_user_profile(db=db, user_id=user_id)
     if profile is None:

@@ -355,7 +355,5 @@ async def update_profile_avatar(
     The previous avatar file is deleted.
     """
     data = await file.read(MAX_AVATAR_SIZE + 1)
-    profile = await update_user_avatar(
-        db=db, user_id=current_user.id, data=data, content_type=file.content_type
-    )
+    profile = await update_user_avatar(db=db, user_id=current_user.id, data=data)
     return _to_profile_response(current_user, profile)
