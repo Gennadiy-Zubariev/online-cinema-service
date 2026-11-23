@@ -54,6 +54,22 @@ from src.tasks.emails import send_activation_email, send_password_reset_email
 MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2 MB
 
 
+async def _issue_refresh_token(
+    db: AsyncSession, user_id: int, settings: Settings
+) -> str:
+    """Create a refresh JWT and store its hash; the caller commits."""
+    refresh_token = create_refresh_token(user_id=user_id, settings=settings)
+    db.add(
+        RefreshToken(
+            user_id=user_id,
+            token_hash=hash_token(refresh_token),
+            expires_at=datetime.now(UTC)
+            + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+        )
+    )
+    return refresh_token
+
+
 async def register_user(
     db: AsyncSession, data: UserRegisterRequest, settings: Settings
 ) -> User:
@@ -173,14 +189,8 @@ async def login_user(
     if not user.is_active:
         raise UserNotActiveError()
 
-    refresh_token = create_refresh_token(user_id=user.id, settings=settings)
-    db.add(
-        RefreshToken(
-            user_id=user.id,
-            token_hash=hash_token(refresh_token),
-            expires_at=datetime.now(UTC)
-            + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
-        )
+    refresh_token = await _issue_refresh_token(
+        db=db, user_id=user.id, settings=settings
     )
     await db.commit()
     return create_access_token(user_id=user.id, settings=settings), refresh_token
@@ -194,23 +204,37 @@ async def logout_user(db: AsyncSession, refresh_token: str) -> None:
     await db.commit()
 
 
-async def refresh_access_token(
+async def rotate_refresh_token(
     db: AsyncSession, refresh_token: str, settings: Settings
-) -> str:
-    """Return a new access token for a valid, not revoked refresh token.
+) -> tuple[str, str]:
+    """Revoke the refresh token and return a new (access, refresh) pair.
 
-    Raises InvalidRefreshTokenError if the token is invalid, revoked or the
-    user is deactivated. The refresh token is not rotated.
+    A validly signed token that is no longer in DB was already rotated or
+    logged out: it may be stolen, so all refresh tokens of its user are
+    revoked (every device has to log in again). DELETE ... RETURNING is
+    atomic: of two concurrent requests with the same token only one gets
+    the row. Raises InvalidRefreshTokenError (also for a deactivated user).
     """
     user_id = decode_refresh_token(token=refresh_token, settings=settings)
-    token = await db.scalar(
-        select(RefreshToken)
+    revoked_id = await db.scalar(
+        delete(RefreshToken)
         .where(RefreshToken.token_hash == hash_token(refresh_token))
-        .options(joinedload(RefreshToken.user))
+        .returning(RefreshToken.id)
     )
-    if token is None or not token.user.is_active:
+    if revoked_id is None:
+        await db.execute(delete(RefreshToken).where(RefreshToken.user_id == user_id))
+        await db.commit()
         raise InvalidRefreshTokenError()
-    return create_access_token(user_id=user_id, settings=settings)
+
+    user = await db.get(User, user_id)
+    if user is None or not user.is_active:
+        raise InvalidRefreshTokenError()
+
+    new_refresh_token = await _issue_refresh_token(
+        db=db, user_id=user_id, settings=settings
+    )
+    await db.commit()
+    return create_access_token(user_id=user_id, settings=settings), new_refresh_token
 
 
 async def change_user_password(
