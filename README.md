@@ -28,7 +28,7 @@ demo as well — access is given on request.
   JWT login (access token + refresh token in an httpOnly cookie), logout, password
   change and reset by email, profile with avatar.
 - **Roles** — `user`, `moderator` (+ catalog management), `admin` (+ user groups,
-  manual activation).
+  manual activation and deactivation).
 - **Catalog** — pagination, filters (year, IMDb, genre), sorting (price, year,
   popularity, IMDb), search by title, description, actor and director; genres with
   movie counts.
@@ -243,6 +243,12 @@ GitHub Actions secrets hold only the SSH connection data for the deploy workflow
   in memory on the client.
 - Passwords hashed with Argon2; activation / reset / refresh tokens stored as
   SHA-256 hashes.
+- Refresh tokens are rotated on every use; reuse of an already rotated token is
+  treated as theft and revokes all sessions of the user.
+- Deactivating a user takes effect immediately: access tokens stop working and all
+  refresh tokens are revoked.
+- Uploaded images (avatars, posters) are checked by their content with Pillow, not by
+  the client's `Content-Type`.
 - Swagger UI is available in development only: in production nginx exposes just
   `/api/`.
 
