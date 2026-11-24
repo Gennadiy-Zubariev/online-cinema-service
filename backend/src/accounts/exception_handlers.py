@@ -93,3 +93,17 @@ async def user_not_found_handler(request: Request, exc: Exception) -> JSONRespon
         status_code=status.HTTP_404_NOT_FOUND,
         content={"detail": "User not found."},
     )
+
+
+async def user_deactivated_handler(request: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={"detail": "Account is deactivated."},
+    )
+
+
+async def self_deactivation_handler(request: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={"detail": "You cannot deactivate your own account."},
+    )

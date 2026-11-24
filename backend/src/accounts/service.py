@@ -18,6 +18,8 @@ from src.accounts.exceptions import (
     IncorrectPasswordError,
     InvalidPasswordResetTokenError,
     UserNotFoundError,
+    UserDeactivatedError,
+    SelfDeactivationError,
 )
 from src.accounts.models import (
     ActivationToken,
@@ -52,6 +54,22 @@ from src.storage.images import validate_image
 from src.tasks.emails import send_activation_email, send_password_reset_email
 
 MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2 MB
+
+
+async def _issue_refresh_token(
+    db: AsyncSession, user_id: int, settings: Settings
+) -> str:
+    """Create a refresh JWT and store its hash; the caller commits."""
+    refresh_token = create_refresh_token(user_id=user_id, settings=settings)
+    db.add(
+        RefreshToken(
+            user_id=user_id,
+            token_hash=hash_token(refresh_token),
+            expires_at=datetime.now(UTC)
+            + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+        )
+    )
+    return refresh_token
 
 
 async def register_user(
@@ -125,7 +143,8 @@ async def resend_activation_token(
 ) -> None:
     """Replace the activation token and send the email again.
 
-    Unknown or already active email -> silent return (no user enumeration).
+    Unknown, already active or deactivated email -> silent return (no user
+    enumeration; a deactivated user must not reactivate himself).
     The old token is flushed out first: otherwise the unit of work inserts
     the new one before deleting the old one and hits the unique user_id.
     """
@@ -134,7 +153,7 @@ async def resend_activation_token(
         .where(User.email == data.email)
         .options(joinedload(User.activation_token))
     )
-    if not user or user.is_active:
+    if not user or user.is_active or user.deactivated_at is not None:
         return
     activation_token = user.activation_token
     if activation_token is not None:
@@ -158,7 +177,8 @@ async def login_user(
     """Check credentials and return (access token, refresh token).
 
     Raises InvalidCredentialsError for an unknown email or a wrong password,
-    UserNotActiveError only after the password matched. Stores the refresh
+    UserDeactivatedError / UserNotActiveError only after the password matched.
+    Stores the refresh
     token hash; tokens of other devices are kept.
     """
     user = await db.scalar(select(User).where(User.email == data.email))
@@ -170,17 +190,13 @@ async def login_user(
     )
     if not is_password_valid:
         raise InvalidCredentialsError()
+    if user.deactivated_at is not None:
+        raise UserDeactivatedError()
     if not user.is_active:
         raise UserNotActiveError()
 
-    refresh_token = create_refresh_token(user_id=user.id, settings=settings)
-    db.add(
-        RefreshToken(
-            user_id=user.id,
-            token_hash=hash_token(refresh_token),
-            expires_at=datetime.now(UTC)
-            + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
-        )
+    refresh_token = await _issue_refresh_token(
+        db=db, user_id=user.id, settings=settings
     )
     await db.commit()
     return create_access_token(user_id=user.id, settings=settings), refresh_token
@@ -194,22 +210,39 @@ async def logout_user(db: AsyncSession, refresh_token: str) -> None:
     await db.commit()
 
 
-async def refresh_access_token(
+async def rotate_refresh_token(
     db: AsyncSession, refresh_token: str, settings: Settings
-) -> str:
-    """Return a new access token for a valid, not revoked refresh token.
+) -> tuple[str, str]:
+    """Revoke the refresh token and return a new (access, refresh) pair.
 
-    Raises InvalidRefreshTokenError. The refresh token is not rotated.
+    A validly signed token that is no longer in DB was already rotated or
+    logged out: it may be stolen, so all refresh tokens of its user are
+    revoked (every device has to log in again). DELETE ... RETURNING is
+    atomic: of two concurrent requests with the same token only one gets
+    the row. Raises InvalidRefreshTokenError (also for a deactivated user).
     """
     user_id = decode_refresh_token(token=refresh_token, settings=settings)
-    token_id = await db.scalar(
-        select(RefreshToken.id).where(
-            RefreshToken.token_hash == hash_token(refresh_token)
-        )
+    revoked_id = await db.scalar(
+        delete(RefreshToken)
+        .where(RefreshToken.token_hash == hash_token(refresh_token))
+        .returning(RefreshToken.id)
     )
-    if token_id is None:
+    if revoked_id is None:
+        await db.execute(delete(RefreshToken).where(RefreshToken.user_id == user_id))
+        await db.commit()
         raise InvalidRefreshTokenError()
-    return create_access_token(user_id=user_id, settings=settings)
+
+    user = await db.get(User, user_id)
+    if user is None or not user.is_active:
+        await db.execute(delete(RefreshToken).where(RefreshToken.user_id == user_id))
+        await db.commit()
+        raise InvalidRefreshTokenError()
+
+    new_refresh_token = await _issue_refresh_token(
+        db=db, user_id=user_id, settings=settings
+    )
+    await db.commit()
+    return create_access_token(user_id=user_id, settings=settings), new_refresh_token
 
 
 async def change_user_password(
@@ -300,7 +333,9 @@ async def change_user_group(
 async def activate_user_manually(db: AsyncSession, user_id: int) -> None:
     """Activate the user (admin action) and delete the activation token.
 
-    Idempotent for an active user; raises UserNotFoundError.
+    Also lifts a deactivation. Refresh tokens issued before the user became
+    inactive are deleted, so old sessions do not come back to life.
+    Idempotent for an active user (his sessions stay); raises UserNotFoundError.
     """
     user = await db.scalar(
         select(User)
@@ -309,10 +344,42 @@ async def activate_user_manually(db: AsyncSession, user_id: int) -> None:
     )
     if user is None:
         raise UserNotFoundError()
-
+    was_active = user.is_active
     user.is_active = True
+    user.deactivated_at = None
     if user.activation_token is not None:
         await db.delete(user.activation_token)
+    if not was_active:
+        await db.execute(delete(RefreshToken).where(RefreshToken.user_id == user.id))
+    await db.commit()
+
+
+async def deactivate_user_manually(
+    db: AsyncSession, user_id: int, admin_id: int
+) -> None:
+    """Deactivate the user (admin action) and end all his sessions.
+
+    Deletes refresh tokens (every device is logged out) and the activation
+    token; deactivated_at blocks resending the activation email, so only an
+    admin can activate the user again. Access tokens stop working at once:
+    get_current_user checks is_active. Idempotent (the first deactivation
+    time is kept). Raises SelfDeactivationError or UserNotFoundError.
+    """
+    if user_id == admin_id:
+        raise SelfDeactivationError()
+    user = await db.scalar(
+        select(User)
+        .where(User.id == user_id)
+        .options(joinedload(User.activation_token))
+    )
+    if user is None:
+        raise UserNotFoundError()
+    user.is_active = False
+    if user.deactivated_at is None:
+        user.deactivated_at = datetime.now(UTC)
+    if user.activation_token is not None:
+        await db.delete(user.activation_token)
+    await db.execute(delete(RefreshToken).where(RefreshToken.user_id == user.id))
     await db.commit()
 
 
@@ -356,7 +423,7 @@ async def update_user_profile(
 
 
 async def update_user_avatar(
-    db: AsyncSession, user_id: int, data: bytes, content_type: str | None
+    db: AsyncSession, user_id: int, data: bytes
 ) -> UserProfile:
     """Validate and upload a new avatar, then delete the old file.
 
@@ -364,7 +431,7 @@ async def update_user_avatar(
     Order upload -> commit -> delete old: a failure leaves at most an orphan
     file in S3, never a profile pointing to a missing one.
     """
-    content_type, extension = validate_image(data, content_type, MAX_AVATAR_SIZE)
+    content_type, extension = validate_image(data, MAX_AVATAR_SIZE)
 
     profile = await get_user_profile(db=db, user_id=user_id)
     if profile is None:

@@ -192,9 +192,7 @@ async def upload_movie_poster(
     Returns 404 if the movie does not exist.
     """
     data = await file.read(MAX_POSTER_SIZE + 1)
-    movie = await update_movie_poster(
-        db=db, movie_id=movie_id, data=data, content_type=file.content_type
-    )
+    movie = await update_movie_poster(db=db, movie_id=movie_id, data=data)
     return _to_movie_response(movie)
 
 

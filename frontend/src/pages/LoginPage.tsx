@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 
 import { ApiError } from '../api/client'
+import { translateMessage } from '../api/messages'
 import { useAuth } from '../auth/useAuth'
 import { AuthCard } from '../components/AuthCard'
 import { ResendActivation } from '../components/ResendActivation'
@@ -30,8 +31,12 @@ export function LoginPage() {
     mutation.mutate()
   }
 
-  // 403 - right password, but the account is not activated yet.
-  const notActivated = mutation.error instanceof ApiError && mutation.error.status === 403
+  // 403 - right password, but the account is not activated yet (or deactivated by
+  // an admin: then resending the activation email would not help).
+  const notActivated =
+    mutation.error instanceof ApiError &&
+    mutation.error.status === 403 &&
+    mutation.error.message !== translateMessage('Account is deactivated.')
 
   return (
     <AuthCard title="Вхід">

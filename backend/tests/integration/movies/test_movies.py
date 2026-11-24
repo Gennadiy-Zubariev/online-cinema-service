@@ -32,6 +32,7 @@ from src.movies.models import (
 )
 from src.movies.movies_service import MAX_POSTER_SIZE
 from src.orders.models import Order, OrderItem, OrderStatusEnum
+from tests.images import make_image
 from tests.integration.conftest import (
     UNKNOWN_ID,
     Catalog,
@@ -800,6 +801,11 @@ def storage_mock(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
     return mocks
 
 
+PNG_IMAGE = make_image("PNG")
+JPEG_IMAGE = make_image("JPEG")
+WEBP_IMAGE = make_image("WEBP")
+
+
 def poster_url(movie_id: int) -> str:
     return f"{movie_url(movie_id)}/poster"
 
@@ -808,7 +814,7 @@ async def test_upload_poster_requires_token(
     client: AsyncClient, movie: Movie, storage_mock: dict[str, MagicMock]
 ) -> None:
     response = await client.put(
-        poster_url(movie.id), files={"file": ("p.png", b"img", "image/png")}
+        poster_url(movie.id), files={"file": ("p.png", PNG_IMAGE, "image/png")}
     )
 
     assert response.status_code == 401
@@ -825,7 +831,7 @@ async def test_upload_poster_rejects_regular_user(
 
     response = await client.put(
         poster_url(movie.id),
-        files={"file": ("p.png", b"img", "image/png")},
+        files={"file": ("p.png", PNG_IMAGE, "image/png")},
         headers=auth_header(caller),
     )
 
@@ -846,7 +852,7 @@ async def test_upload_poster_stores_key_and_returns_movie(
 
     response = await client.put(
         poster_url(movie.id),
-        files={"file": ("my poster.JPG", b"jpeg-bytes", "image/jpeg")},
+        files={"file": ("my poster.JPG", JPEG_IMAGE, "image/jpeg")},
         headers=auth_header(caller),
     )
 
@@ -857,7 +863,7 @@ async def test_upload_poster_stores_key_and_returns_movie(
     assert key.startswith(f"posters/{movie.id}/")
     assert key.endswith(".jpg")
     assert "poster.JPG" not in key
-    assert (data, content_type) == (b"jpeg-bytes", "image/jpeg")
+    assert (data, content_type) == (JPEG_IMAGE, "image/jpeg")
     storage_mock["delete_file"].assert_not_called()
 
     await db_session.refresh(movie)
@@ -881,14 +887,14 @@ async def test_upload_poster_replaces_and_deletes_old_file(
     headers = auth_header(await create_caller(create_user))
     await client.put(
         poster_url(movie.id),
-        files={"file": ("a.png", b"old", "image/png")},
+        files={"file": ("a.png", PNG_IMAGE, "image/png")},
         headers=headers,
     )
     old_key = storage_mock["upload_file"].call_args.args[0]
 
     response = await client.put(
         poster_url(movie.id),
-        files={"file": ("b.webp", b"new", "image/webp")},
+        files={"file": ("b.webp", WEBP_IMAGE, "image/webp")},
         headers=headers,
     )
 
@@ -908,7 +914,7 @@ async def test_update_keeps_poster(
     headers = auth_header(await create_caller(create_user))
     await client.put(
         poster_url(movie.id),
-        files={"file": ("p.png", b"img", "image/png")},
+        files={"file": ("p.png", PNG_IMAGE, "image/png")},
         headers=headers,
     )
 
@@ -928,7 +934,7 @@ async def test_upload_poster_unknown_movie_returns_404(
 
     response = await client.put(
         poster_url(UNKNOWN_ID),
-        files={"file": ("p.png", b"img", "image/png")},
+        files={"file": ("p.png", PNG_IMAGE, "image/png")},
         headers=auth_header(caller),
     )
 
@@ -937,20 +943,28 @@ async def test_upload_poster_unknown_movie_returns_404(
     storage_mock["upload_file"].assert_not_called()
 
 
-@pytest.mark.parametrize("content_type", ["image/gif", "image/svg+xml", "text/plain"])
-async def test_upload_poster_rejects_unsupported_type(
+@pytest.mark.parametrize(
+    "data",
+    [
+        pytest.param(make_image("GIF"), id="gif"),
+        pytest.param(b'<svg xmlns="http://www.w3.org/2000/svg"/>', id="svg"),
+        pytest.param(b"<html><script>alert(1)</script></html>", id="html"),
+    ],
+)
+async def test_upload_poster_rejects_content_that_is_not_supported_image(
     client: AsyncClient,
     create_user: CreateUser,
     db_session: AsyncSession,
     movie: Movie,
     storage_mock: dict[str, MagicMock],
-    content_type: str,
+    data: bytes,
 ) -> None:
+    # The client claims image/png: only the bytes decide.
     caller = await create_caller(create_user)
 
     response = await client.put(
         poster_url(movie.id),
-        files={"file": ("file", b"data", content_type)},
+        files={"file": ("poster.png", data, "image/png")},
         headers=auth_header(caller),
     )
 
@@ -990,7 +1004,9 @@ async def test_upload_poster_accepts_file_of_max_size(
 
     response = await client.put(
         poster_url(movie.id),
-        files={"file": ("max.png", b"x" * MAX_POSTER_SIZE, "image/png")},
+        files={
+            "file": ("max.png", make_image("PNG", size=MAX_POSTER_SIZE), "image/png")
+        },
         headers=auth_header(caller),
     )
 

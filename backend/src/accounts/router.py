@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Response, status, Cookie, Depends, UploadFile
 
-from src.accounts.dependencies import CurrentUser, get_current_admin
+from src.accounts.dependencies import AdminUser, CurrentUser, get_current_admin
 from src.accounts.exceptions import InvalidRefreshTokenError
 from src.accounts.models import User, UserGroupEnum, UserProfile
 from src.accounts.schemas import (
@@ -28,20 +28,21 @@ from src.accounts.service import (
     resend_activation_token,
     login_user,
     logout_user,
-    refresh_access_token,
     change_user_password,
     request_password_reset,
     reset_password,
     change_user_group,
     activate_user_manually,
+    deactivate_user_manually,
     list_users,
     get_user_profile,
     update_user_profile,
     update_user_avatar,
     MAX_AVATAR_SIZE,
+    rotate_refresh_token,
 )
 from src.common.pagination import Pagination
-from src.config.settings import SettingsDep
+from src.config.settings import SettingsDep, Settings
 from src.database.session import DbSession
 from src.storage.client import get_file_url
 
@@ -49,6 +50,19 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 
 REFRESH_COOKIE_NAME = "refresh_token"
 REFRESH_COOKIE_PATH = "/api/v1/accounts"
+
+
+def _set_refresh_cookie(response: Response, token: str, settings: Settings) -> None:
+    """Put the refresh token into an httpOnly cookie (login and refresh)."""
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=token,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        path=REFRESH_COOKIE_PATH,
+    )
 
 
 @router.post(
@@ -119,15 +133,7 @@ async def login(
     if the account is not activated.
     """
     access_token, refresh_token = await login_user(db=db, data=data, settings=settings)
-    response.set_cookie(
-        key=REFRESH_COOKIE_NAME,
-        value=refresh_token,
-        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
-        httponly=True,
-        secure=settings.COOKIE_SECURE,
-        samesite="lax",
-        path=REFRESH_COOKIE_PATH,
-    )
+    _set_refresh_cookie(response, refresh_token, settings)
     return AccessTokenResponse(access_token=access_token)
 
 
@@ -164,19 +170,21 @@ async def logout(
 async def refresh(
     db: DbSession,
     settings: SettingsDep,
+    response: Response,
     refresh_token: Annotated[str | None, Cookie()] = None,
 ) -> AccessTokenResponse:
-    """Get a new access token using the refresh token from the cookie.
+    """Get a new access token and rotate the refresh token in the cookie.
 
-    Returns 401 if the refresh token is missing, invalid, expired
-    or revoked by logout.
+    The old refresh token stops working. Reusing it (a stolen copy) revokes
+    all refresh tokens of the user. Returns 401 if the refresh token is
+    missing, invalid, expired, revoked or the user is deactivated.
     """
     if refresh_token is None:
         raise InvalidRefreshTokenError()
-    access_token = await refresh_access_token(
+    access_token, new_refresh_token = await rotate_refresh_token(
         db=db, refresh_token=refresh_token, settings=settings
     )
-
+    _set_refresh_cookie(response, new_refresh_token, settings)
     return AccessTokenResponse(access_token=access_token)
 
 
@@ -264,6 +272,25 @@ async def activate_user(db: DbSession, user_id: int) -> MessageResponse:
     return MessageResponse(message="User activated.")
 
 
+@router.post(
+    "/users/{user_id}/deactivate",
+    response_model=MessageResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def deactivate_user(
+    db: DbSession, admin: AdminUser, user_id: int
+) -> MessageResponse:
+    """Manually deactivate a user's account (admin only).
+
+    Logs the user out on every device; he cannot log in or resend the
+    activation email until an admin activates him again. Already
+    deactivated users get 200 as well. Returns 400 for the admin's own
+    account and 404 if the user does not exist.
+    """
+    await deactivate_user_manually(db=db, user_id=user_id, admin_id=admin.id)
+    return MessageResponse(message="User deactivated.")
+
+
 @router.get(
     "/users",
     response_model=UserListResponse,
@@ -348,7 +375,5 @@ async def update_profile_avatar(
     The previous avatar file is deleted.
     """
     data = await file.read(MAX_AVATAR_SIZE + 1)
-    profile = await update_user_avatar(
-        db=db, user_id=current_user.id, data=data, content_type=file.content_type
-    )
+    profile = await update_user_avatar(db=db, user_id=current_user.id, data=data)
     return _to_profile_response(current_user, profile)

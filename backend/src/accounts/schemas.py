@@ -79,6 +79,7 @@ class UserAdminResponse(BaseModel):
     id: int
     email: str
     is_active: bool
+    deactivated_at: datetime | None
     created_at: datetime
     group: UserGroupResponse
 

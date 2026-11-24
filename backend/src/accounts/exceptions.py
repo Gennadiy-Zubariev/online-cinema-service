@@ -48,3 +48,11 @@ class PermissionDeniedError(AccountsError):
 
 class UserNotFoundError(AccountsError):
     """Raised when no user exists with the given id."""
+
+
+class UserDeactivatedError(AccountsError):
+    """Raised when credentials are valid but an admin deactivated the account."""
+
+
+class SelfDeactivationError(AccountsError):
+    """Raised when an admin tries to deactivate their own account."""

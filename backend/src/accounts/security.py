@@ -114,7 +114,7 @@ def decode_refresh_token(token: str, settings: Settings) -> int:
     """Return the user id from a refresh JWT.
 
     Raises InvalidRefreshTokenError for any invalid token.
-    Does not check revocation: that needs the DB (see refresh_access_token).
+    Does not check revocation: that needs the DB (see rotate_refresh_token).
     """
     try:
         return _decode_jwt_token(token, "refresh", settings)
